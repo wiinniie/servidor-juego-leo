@@ -98,25 +98,77 @@ Abre automáticamente `http://localhost:8080/`.
 
 ---
 
-## 📁 7. Estructura del Proyecto
+## 🔐 7. Arquitectura de Autenticación, Roles y Persistencia en MongoDB Atlas
+
+La versión 2.0 de LEO incluye una arquitectura cliente-servidor robusta con:
+
+### 🍃 Persistencia con MongoDB Atlas & Mongoose
+- **Mongoose ODM**: Conexión a MongoDB Atlas mediante `process.env.MONGODB_URI`.
+- **Modelo de Usuario (`User`)**:
+  - `username` (String, único, en minúsculas, validado).
+  - `password` (String, encriptada con `bcryptjs` con 10 rondas de salt).
+  - `role` (String, `'admin'` o `'user'`).
+  - `displayName`, `profile`, `createdAt`, `lastLogin`.
+- **Administrador Principal por Defecto**:
+  Al arrancar el servidor `server.js`, verifica automáticamente si existe el administrador; si no existe, lo crea con:
+  - **Usuario:** `admin`
+  - **Contraseña:** `admin123`
+  - **Rol:** `admin`
+
+### 👥 Manejo de Roles
+1. **Rol Usuario / Estudiante (`user`)**:
+   - Acceso inmediato al mundo de aprendizaje interactivo.
+   - Evaluación diagnóstica, ruleta de lectura, 15 preguntas con comodín y retroalimentación pedagógica.
+   - Guardado automático de sesión en `localStorage` (`leo_auth_session`).
+2. **Rol Administrador Principal (`admin`)**:
+   - **Panel de Control Total (`screen-admin-dashboard`)**:
+     - **Gestión de usuarios en vivo**: Monitor en tiempo real de estudiantes conectados vía Socket.io.
+     - **Moderación instantánea**: Capacidad de enviar avisos directos o forzar desconexión (Kick) a usuarios activos.
+     - **Asignación en vivo**: Lanzar lecturas o actividades sincrónicas a todos los estudiantes con 1 clic.
+     - **Difusión global**: Transmisión de anuncios y retos a todas las pantallas conectadas.
+     - **Estadísticas generales**: Métricas en tiempo real de registros en MongoDB Atlas, usuarios en línea y catálogo.
+
+### 🚀 Cómo Ejecutar con Node.js y MongoDB Atlas
+1. Copia `.env.example` a `.env` y define tu cadena de conexión:
+   ```env
+   PORT=8080
+   MONGODB_URI=mongodb+srv://<usuario>:<password>@cluster0.mongodb.net/leo_db?retryWrites=true&w=majority
+   JWT_SECRET=tu_clave_secreta_jwt
+   ```
+2. Instala dependencias y arranca el servidor:
+   ```bash
+   npm install
+   npm start
+   ```
+3. Accede en tu navegador a:
+   `http://localhost:8080/`
+
+---
+
+## 📁 8. Estructura del Proyecto
 
 ```text
 leo-app/
+├── .env                          # Variables de entorno locales
+├── .env.example                  # Plantilla de configuración de MongoDB Atlas
+├── package.json                  # Dependencias: mongoose, bcryptjs, jsonwebtoken, dotenv, cors, express, socket.io
+├── server.js                     # Servidor Node.js con MongoDB Atlas, Socket.io y REST API
+├── index.html                    # SPA con pantalla de Login/Registro y Panel de Administrador Principal
+├── serve.ps1                     # Servidor local de respaldo en PowerShell
 ├── assets/
 │   └── leo-logo.png              # Logo oficial original de Leo
 ├── css/
-│   └── styles.css                # Sistema de diseño de videojuego educativo y responsive
-├── js/
-│   ├── data/
-│   │   ├── diagnostic.js         # Prueba diagnóstica inicial en 5 etapas
-│   │   ├── readings.js           # Banco de lecturas peruanas y 15 preguntas
-│   │   └── gamification.js       # Logros, retos diarios y tienda del avatar
-│   ├── services/
-│   │   ├── audio-service.js      # Web Audio SFX + SpeechSynthesis + Reconocimiento de voz
-│   │   ├── ai-service.js         # Motor IA de generación y evaluación cualitativa
-│   │   └── storage-service.js    # Persistencia local con datos iniciales
-│   └── app.js                    # Controlador general y enrutador de las 20 pantallas
-├── serve.ps1                     # Servidor HTTP local ligero en PowerShell
-├── README.md                     # Documentación integral
-└── index.html                    # Estructura de la aplicación completa
+│   └── styles.css                # Sistema de diseño, pantalla de Auth y Panel de Administrador
+└── js/
+    ├── data/
+    │   ├── diagnostic.js         # Prueba diagnóstica inicial en 5 etapas
+    │   ├── readings.js           # Banco de 15 lecturas peruanas y preguntas
+    │   └── gamification.js       # Logros, retos y avatar
+    ├── services/
+    │   ├── auth-service.js       # Autenticación, roles, localStorage y sync Socket.io
+    │   ├── audio-service.js      # SFX + TTS + Reconocimiento de voz
+    │   ├── ai-service.js         # Motor IA de preguntas y retroalimentación
+    │   └── storage-service.js    # Repositorio y datos persistentes
+    └── app.js                    # Controlador general de las 22 pantallas de la app
 ```
+

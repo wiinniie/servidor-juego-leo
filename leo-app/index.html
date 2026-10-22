@@ -42,8 +42,15 @@
     </div>
 
     <div class="nav-actions">
+      <div id="nav-user-chip" class="user-nav-chip" style="display: none;" title="Sesión activa">
+        <span id="nav-user-icon">👤</span>
+        <span id="nav-user-name">Usuario</span>
+      </div>
       <button id="btn-toggle-sound" class="btn-icon" title="Sonido activado" aria-label="Control de sonido">
         🔊
+      </button>
+      <button id="btn-nav-admin" class="btn-primary" style="display: none; padding: 7px 14px; font-size: 0.88rem; background: #0f172a;" title="Panel de Administrador Principal" onclick="window.leoApp.navigateTo('screen-admin-dashboard')">
+        👑 Panel Admin
       </button>
       <button id="btn-nav-profiles" class="btn-icon" title="Cambiar estudiante"
         onclick="window.leoApp.navigateTo('screen-profiles')">
@@ -51,6 +58,9 @@
       </button>
       <button id="btn-toggle-role" class="btn-mode-toggle">
         👩‍🏫 Modo Docente
+      </button>
+      <button id="btn-nav-logout" class="btn-outline" style="padding: 6px 12px; font-size: 0.85rem; display: none;" title="Cerrar sesión" onclick="window.leoApp.logout()">
+        🚪 Salir
       </button>
     </div>
   </header>
@@ -60,8 +70,119 @@
        ========================================================================= -->
   <main class="app-container">
 
+    <!-- =========================================================================
+         PANTALLA DE AUTENTICACIÓN (LOGIN Y REGISTRO CON ROLES)
+         ========================================================================= -->
+    <section id="screen-auth" class="app-screen">
+      <div class="auth-screen-container">
+        <div class="auth-card">
+          <div class="auth-header">
+            <div class="auth-logo-wrap">
+              <img src="assets/leo-logo.png" alt="Logo de Leo" class="auth-logo-img">
+            </div>
+            <h1 class="auth-title">Bienvenido a <span class="leo-orange">LEO</span></h1>
+            <p class="auth-subtitle">Ingresa a tu cuenta o regístrate para iniciar tu aventura de lectura 🇵🇪</p>
+          </div>
+
+          <!-- Selector de pestañas: Iniciar Sesión / Registro -->
+          <div class="auth-tabs">
+            <button id="tab-btn-login" class="auth-tab-btn active" onclick="window.leoApp.switchAuthTab('login')">
+              🔑 Iniciar Sesión
+            </button>
+            <button id="tab-btn-register" class="auth-tab-btn" onclick="window.leoApp.switchAuthTab('register')">
+              ✨ Crear Cuenta
+            </button>
+          </div>
+
+          <!-- Mensaje de estado (alertas de éxito o error) -->
+          <div id="auth-status-banner" class="auth-status-banner"></div>
+
+          <!-- FORMULARIO 1: LOGIN -->
+          <form id="form-auth-login" onsubmit="window.leoApp.handleLoginSubmit(event)">
+            <div class="auth-form-group">
+              <label class="auth-label" for="login-username">Usuario:</label>
+              <input type="text" id="login-username" class="auth-input" placeholder="Ej. admin o tu nombre de usuario" autocomplete="username" required>
+            </div>
+
+            <div class="auth-form-group">
+              <label class="auth-label" for="login-password">Contraseña:</label>
+              <input type="password" id="login-password" class="auth-input" placeholder="Ingresa tu contraseña" autocomplete="current-password" required>
+            </div>
+
+            <button type="submit" id="btn-login-submit" class="auth-btn-submit">
+              Ingresar a LEO 🚀
+            </button>
+
+            <div class="auth-demo-chips">
+              <div class="auth-demo-label">⚡ Acceso Rápido de Prueba:</div>
+              <div class="auth-demo-buttons">
+                <button type="button" class="auth-demo-btn" onclick="window.leoApp.fillDemoCredentials('admin', 'admin123')">
+                  👑 Admin (admin / admin123)
+                </button>
+                <button type="button" class="auth-demo-btn" onclick="window.leoApp.fillDemoCredentials('mateo', '123456')">
+                  👤 Estudiante (mateo / 123456)
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <!-- FORMULARIO 2: REGISTRO -->
+          <form id="form-auth-register" style="display: none;" onsubmit="window.leoApp.handleRegisterSubmit(event)">
+            <div class="auth-form-group">
+              <label class="auth-label" for="reg-username">Nombre de Usuario:</label>
+              <input type="text" id="reg-username" class="auth-input" placeholder="Mínimo 3 caracteres (ej. lucia_q)" autocomplete="username" required minlength="3">
+            </div>
+
+            <div class="auth-form-group">
+              <label class="auth-label" for="reg-displayName">Nombre Completo o Apodo:</label>
+              <input type="text" id="reg-displayName" class="auth-input" placeholder="Ej. Lucía Quispe" autocomplete="name">
+            </div>
+
+            <div class="auth-form-group">
+              <label class="auth-label" for="reg-password">Contraseña:</label>
+              <input type="password" id="reg-password" class="auth-input" placeholder="Mínimo 6 caracteres" autocomplete="new-password" required minlength="6">
+            </div>
+
+            <div class="auth-form-group">
+              <label class="auth-label" for="reg-confirm-password">Confirmar Contraseña:</label>
+              <input type="password" id="reg-confirm-password" class="auth-input" placeholder="Repite tu contraseña" autocomplete="new-password" required>
+            </div>
+
+            <div class="auth-form-group">
+              <label class="auth-label">Tipo de Rol en la Plataforma:</label>
+              <div class="role-selector-wrap">
+                <div id="role-card-user" class="role-option-card selected" onclick="window.leoApp.selectRegRole('user')">
+                  <span class="role-option-icon">👤</span>
+                  <div class="role-option-title">Estudiante / Usuario</div>
+                  <div style="font-size: 0.78rem; color: #64748b;">Acceso al juego y lecturas</div>
+                </div>
+                <div id="role-card-admin" class="role-option-card" onclick="window.leoApp.selectRegRole('admin')">
+                  <span class="role-option-icon">👑</span>
+                  <div class="role-option-title">Administrador</div>
+                  <div style="font-size: 0.78rem; color: #64748b;">Control total del sistema</div>
+                </div>
+              </div>
+              <input type="hidden" id="reg-role-value" value="user">
+            </div>
+
+            <button type="submit" id="btn-register-submit" class="auth-btn-submit" style="background: linear-gradient(135deg, #ff9800, #f57c00);">
+              Crear mi Cuenta 🎉
+            </button>
+          </form>
+
+          <div style="margin-top: 20px; text-align: center; font-size: 0.82rem; color: #94a3b8; display: flex; justify-content: center; gap: 16px;">
+            <span>🍃 MongoDB Atlas</span>
+            <span>•</span>
+            <span>⚡ Socket.io en Vivo</span>
+            <span>•</span>
+            <span>🔒 Bcrypt Encriptado</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- PANTALLA 1: BIENVENIDA / SPLASH -->
-    <section id="screen-welcome" class="app-screen active">
+    <section id="screen-welcome" class="app-screen">
       <div class="welcome-hero">
         <div class="welcome-logo-container">
           <img src="assets/leo-logo.png" alt="Logo de Leo" class="welcome-logo-img">
@@ -816,10 +937,255 @@
       </div>
     </section>
 
+    <!-- =========================================================================
+         PANTALLA: PANEL DE ADMINISTRADOR PRINCIPAL (CONTROL TOTAL DE LA APP)
+         ========================================================================= -->
+    <section id="screen-admin-dashboard" class="app-screen">
+      <div class="admin-dashboard-container">
+
+        <!-- CABECERA DE CONTROL PRINCIPAL -->
+        <div class="admin-header-strip">
+          <div class="admin-header-title-wrap">
+            <div class="admin-crown-badge">👑</div>
+            <div>
+              <h1 class="admin-header-title">Panel de Administrador Principal</h1>
+              <p style="color: #94a3b8; font-size: 0.95rem; margin-bottom: 8px;">
+                Control total de la app, analítica en vivo, moderación de estudiantes y persistencia en MongoDB Atlas.
+              </p>
+              <div class="admin-badges-row">
+                <span id="admin-db-status-pill" class="admin-pill">
+                  🍃 MongoDB Atlas: <strong id="admin-db-status-text">Conectando...</strong>
+                </span>
+                <span class="admin-pill live">
+                  <span class="live-dot"></span> Socket.io: <strong id="admin-socket-status-text">En Tiempo Real</strong>
+                </span>
+                <span class="admin-pill" style="background: rgba(255, 152, 0, 0.2); color: #ffb74d;">
+                  👑 Usuario: <strong id="admin-current-username">admin</strong>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-quick-actions">
+            <button class="btn-secondary" style="font-size: 0.9rem; padding: 10px 18px;" onclick="window.leoApp.navigateTo('screen-dashboard')">
+              🎮 Vista de Juego
+            </button>
+            <button class="btn-primary" style="font-size: 0.9rem; padding: 10px 18px;" onclick="window.leoApp.navigateTo('screen-teacher-dashboard')">
+              👩‍🏫 Panel Pedagógico
+            </button>
+            <button class="btn-outline" style="font-size: 0.9rem; padding: 10px 18px; border-color: #ef4444; color: #fca5a5;" onclick="window.leoApp.logout()">
+              🚪 Cerrar Sesión
+            </button>
+          </div>
+        </div>
+
+        <!-- 1. MÉTRICAS GLOBALES -->
+        <div class="admin-metrics-row">
+          <div class="admin-metric-card">
+            <div class="admin-metric-icon-box" style="background: #e0f2fe; color: #0288d1;">👥</div>
+            <div>
+              <div id="admin-stat-total-users" class="admin-metric-value">--</div>
+              <div class="admin-metric-label">Usuarios en MongoDB Atlas</div>
+            </div>
+          </div>
+
+          <div class="admin-metric-card">
+            <div class="admin-metric-icon-box" style="background: #dcfce7; color: #16a34a;">🟢</div>
+            <div>
+              <div id="admin-stat-connected-users" class="admin-metric-value">1</div>
+              <div class="admin-metric-label">En Línea Ahora Mismo</div>
+            </div>
+          </div>
+
+          <div class="admin-metric-card">
+            <div class="admin-metric-icon-box" style="background: #fef3c7; color: #d97706;">📖</div>
+            <div>
+              <div id="admin-stat-readings-count" class="admin-metric-value">15</div>
+              <div class="admin-metric-label">Lecturas Verificadas del Perú</div>
+            </div>
+          </div>
+
+          <div class="admin-metric-card">
+            <div class="admin-metric-icon-box" style="background: #f3e8ff; color: #9333ea;">🏆</div>
+            <div>
+              <div id="admin-stat-comprehension-rate" class="admin-metric-value">3 Niveles</div>
+              <div class="admin-metric-label">Literal • Inferencial • Crítico</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. GRID PRINCIPAL DE ADMINISTRACIÓN -->
+        <div class="admin-grid-2cols">
+
+          <!-- COLUMNA IZQUIERDA: USUARIOS CONECTADOS Y DIRECTORIO MONGO -->
+          <div style="display: flex; flex-direction: column; gap: 24px;">
+
+            <!-- SECCIÓN A: USUARIOS CONECTADOS EN TIEMPO REAL -->
+            <div class="admin-card-section">
+              <div class="admin-section-header">
+                <div class="admin-section-title">
+                  <span>⚡</span> Usuarios Conectados en Tiempo Real
+                </div>
+                <button class="btn-outline" style="padding: 6px 12px; font-size: 0.82rem;" onclick="window.leoApp.refreshAdminLiveUsers()">
+                  🔄 Actualizar
+                </button>
+              </div>
+
+              <p style="font-size: 0.88rem; color: #64748b; margin-bottom: 14px;">
+                Visualiza a cada estudiante activo, su actividad actual en la app y modéralo de forma instantánea.
+              </p>
+
+              <div class="admin-table-wrap">
+                <table class="admin-live-table">
+                  <thead>
+                    <tr>
+                      <th>Usuario</th>
+                      <th>Rol</th>
+                      <th>Actividad Actual</th>
+                      <th>Conectado</th>
+                      <th>Acciones en Vivo</th>
+                    </tr>
+                  </thead>
+                  <tbody id="admin-live-users-table-body">
+                    <!-- Filas dinámicas generadas desde app.js -->
+                    <tr>
+                      <td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">
+                        Cargando usuarios conectados...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- SECCIÓN B: DIRECTORIO DE USUARIOS REGISTRADOS EN MONGODB ATLAS -->
+            <div class="admin-card-section">
+              <div class="admin-section-header">
+                <div class="admin-section-title">
+                  <span>🍃</span> Directorio de Cuentas (MongoDB Atlas)
+                </div>
+                <button class="btn-outline" style="padding: 6px 12px; font-size: 0.82rem;" onclick="window.leoApp.loadMongoUsersList()">
+                  🔄 Recargar Cuentas
+                </button>
+              </div>
+
+              <div class="admin-table-wrap">
+                <table class="admin-live-table">
+                  <thead>
+                    <tr>
+                      <th>Usuario</th>
+                      <th>Nombre / Apodo</th>
+                      <th>Rol</th>
+                      <th>Fecha de Registro</th>
+                    </tr>
+                  </thead>
+                  <tbody id="admin-mongo-users-table-body">
+                    <tr>
+                      <td colspan="4" style="text-align: center; color: #94a3b8; padding: 20px;">
+                        Consultando MongoDB Atlas...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- COLUMNA DERECHA: SELECCIÓN DE ACTIVIDADES Y MODERACIÓN GLOBAL -->
+          <div style="display: flex; flex-direction: column; gap: 24px;">
+
+            <!-- SECCIÓN C: CONTROL Y ASIGNACIÓN DE LECTURAS EN VIVO -->
+            <div class="admin-card-section">
+              <div class="admin-section-header">
+                <div class="admin-section-title">
+                  <span>📖</span> Asignación de Lectura en Tiempo Real
+                </div>
+              </div>
+
+              <p style="font-size: 0.88rem; color: #64748b; margin-bottom: 14px;">
+                Selecciona una lectura peruana y publícala instantáneamente a todos los estudiantes conectados o a uno específico:
+              </p>
+
+              <div class="admin-broadcast-box">
+                <label style="font-weight: 800; font-size: 0.88rem; display: block; margin-bottom: 6px;">
+                  1. Filtrar por Nivel Pedagógico:
+                </label>
+                <select id="admin-filter-reading-level" class="admin-select-ctrl" onchange="window.leoApp.filterAdminReadingsDropdown()">
+                  <option value="ALL">🌐 Todos los Niveles</option>
+                  <option value="INICIO">🟢 Nivel Inicio (Sílabas, Palabras y Frases)</option>
+                  <option value="DESARROLLO">🟡 Nivel Desarrollo (Cuentos y Biografías)</option>
+                  <option value="AVANZADO">🔴 Nivel Avanzado (Textos de 3 Párrafos)</option>
+                </select>
+
+                <label style="font-weight: 800; font-size: 0.88rem; display: block; margin-bottom: 6px;">
+                  2. Seleccionar Lectura Oficial:
+                </label>
+                <select id="admin-selected-reading" class="admin-select-ctrl">
+                  <!-- Opciones dinámicas -->
+                </select>
+
+                <button class="btn-primary" style="width: 100%; padding: 12px; font-size: 1rem; margin-top: 6px;" onclick="window.leoApp.adminBroadcastSelectedReading()">
+                  📢 Lanzar Lectura a Todos los Estudiantes en Vivo 🚀
+                </button>
+              </div>
+            </div>
+
+            <!-- SECCIÓN D: MODERACIÓN Y DIFUSIÓN GLOBAL DE MENSAJES -->
+            <div class="admin-card-section">
+              <div class="admin-section-header">
+                <div class="admin-section-title">
+                  <span>📢</span> Mensajería y Moderación Global
+                </div>
+              </div>
+
+              <p style="font-size: 0.88rem; color: #64748b; margin-bottom: 14px;">
+                Transmite un aviso, felicitación o alerta en vivo a las pantallas de todos los usuarios conectados:
+              </p>
+
+              <form onsubmit="window.leoApp.handleBroadcastAnnouncement(event)">
+                <div style="margin-bottom: 12px;">
+                  <label style="font-weight: 800; font-size: 0.88rem; display: block; margin-bottom: 4px;">
+                    Título del Mensaje:
+                  </label>
+                  <input type="text" id="admin-broadcast-title" class="auth-input" placeholder="Ej. ¡Felicitaciones por la racha de hoy!" required>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                  <label style="font-weight: 800; font-size: 0.88rem; display: block; margin-bottom: 4px;">
+                    Contenido del Anuncio:
+                  </label>
+                  <textarea id="admin-broadcast-msg" class="auth-input" style="min-height: 80px; resize: vertical;" placeholder="Escribe el mensaje motivacional o aviso pedagógico..." required></textarea>
+                </div>
+
+                <div style="margin-bottom: 16px;">
+                  <label style="font-weight: 800; font-size: 0.88rem; display: block; margin-bottom: 4px;">
+                    Tipo de Mensaje:
+                  </label>
+                  <select id="admin-broadcast-type" class="admin-select-ctrl">
+                    <option value="info">ℹ️ Informativo / Noticia</option>
+                    <option value="success">🌟 Felicitación / Celebración</option>
+                    <option value="warning">⚠️ Recordatorio / Alerta</option>
+                  </select>
+                </div>
+
+                <button type="submit" class="btn-secondary" style="width: 100%; padding: 12px; font-size: 1rem;">
+                  🚀 Transmitir Anuncio a Toda la Red
+                </button>
+              </form>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
   </main>
 
   <!-- =========================================================================
-       MODALES DOCENTES (REVISIÓN DE IA Y FICHA DE ESTUDIANTE)
+       MODALES DOCENTES Y DE TIEMPO REAL
        ========================================================================= -->
 
   <!-- Modal Editor y Calidad de IA -->
@@ -843,6 +1209,34 @@
     </div>
   </div>
 
+  <!-- Modal de Anuncio Global en Tiempo Real -->
+  <div id="modal-system-announcement" class="modal-overlay">
+    <div class="modal-card modal-announcement-card">
+      <div id="announcement-icon" class="modal-announcement-icon">📢</div>
+      <h2 id="announcement-title" style="font-size: 1.6rem; margin-bottom: 12px; color: #0f172a;">Aviso de Leo</h2>
+      <p id="announcement-body" style="font-size: 1.1rem; color: #334155; line-height: 1.6; margin-bottom: 24px;">
+        <!-- Contenido dinámico -->
+      </p>
+      <button class="btn-primary" style="font-size: 1.05rem; padding: 12px 30px;" onclick="window.leoApp.closeModal('modal-system-announcement')">
+        ¡Entendido! 👍
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal de Mensaje Directo de Moderación -->
+  <div id="modal-direct-message" class="modal-overlay">
+    <div class="modal-card modal-announcement-card">
+      <div class="modal-announcement-icon">💬</div>
+      <h2 id="direct-msg-title" style="font-size: 1.5rem; margin-bottom: 10px; color: #0f172a;">Mensaje del Administrador</h2>
+      <p id="direct-msg-body" style="font-size: 1.05rem; color: #334155; line-height: 1.6; margin-bottom: 24px; background: #f8fafc; padding: 16px; border-radius: 12px; border: 1px solid #e2e8f0;">
+        <!-- Contenido dinámico -->
+      </p>
+      <button class="btn-primary" style="font-size: 1.05rem; padding: 12px 30px;" onclick="window.leoApp.closeModal('modal-direct-message')">
+        Cerrar Mensaje
+      </button>
+    </div>
+  </div>
+
   <!-- =========================================================================
        SCRIPTS DE LA APLICACIÓN
        ========================================================================= -->
@@ -852,6 +1246,7 @@
   <script src="js/services/audio-service.js"></script>
   <script src="js/services/ai-service.js"></script>
   <script src="js/services/storage-service.js"></script>
+  <script src="js/services/auth-service.js"></script>
   <script src="js/app.js"></script>
 </body>
 

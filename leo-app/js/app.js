@@ -1,16 +1,20 @@
-const socket = io('https://servidor-juego-leo.onrender.com');
+const socketUrl = (typeof window !== 'undefined' && window.location.protocol.startsWith('http'))
+  ? window.location.origin
+  : 'https://servidor-juego-leo.onrender.com';
+const socket = (typeof io !== 'undefined') ? io(socketUrl, { reconnection: true }) : null;
+
 /**
  * LEO – Lectura, Escritura y Oralidad
  * Controlador Principal de la Aplicación (SPA)
  * 
- * Gestiona navegación entre las 20 pantallas, lógica interactiva, evaluación diagnóstica,
- * ruleta de lectura, modo lector con TTS, cuestionario de 15 preguntas con comodín y retroalimentación,
- * avatar personalizable, oratoria con voz, y panel docente con control de calidad de IA.
+ * Gestiona autenticación con roles ('admin' y 'user'), persistencia con MongoDB Atlas,
+ * panel de Administrador Principal con control total en tiempo real vía Socket.io,
+ * evaluación diagnóstica, ruleta de lectura, cuestionario de 15 preguntas y panel docente.
  */
 
 class LeoApp {
   constructor() {
-    this.currentScreen = "screen-welcome";
+    this.currentScreen = "screen-auth";
     this.userMode = "STUDENT"; // "STUDENT" o "TEACHER"
     this.activeReading = null;
     this.activeQuizQuestions = [];
@@ -30,22 +34,55 @@ class LeoApp {
     // Ruleta
     this.isSpinningWheel = false;
 
-    // Docente
+    // Docente y Administración
     this.selectedPendingReading = null;
     this.selectedStudentForDetail = null;
+    this.adminLiveUsers = [];
 
     document.addEventListener("DOMContentLoaded", () => this.init());
   }
 
   init() {
     this.bindGlobalEvents();
+    this.setupSocketGlobalEvents();
     this.updateNavbarUser();
     this.renderProfilesList();
     this.initRouletteCanvas();
     this.checkInitialScreen();
   }
 
+  setupSocketGlobalEvents() {
+    if (!socket) return;
+
+    // Actualizaciones en tiempo real del panel de administrador
+    socket.on("admin:users-update", (data) => {
+      if (data && data.users) {
+        this.adminLiveUsers = data.users;
+        if (this.currentScreen === "screen-admin-dashboard") {
+          this.renderAdminLiveUsers(data.users);
+          const connCountEl = document.getElementById("admin-stat-connected-users");
+          if (connCountEl) connCountEl.innerText = data.users.length;
+        }
+      }
+    });
+  }
+
   checkInitialScreen() {
+    // 1. Verificar si hay sesión activa en localStorage
+    if (!window.authService || !window.authService.isAuthenticated()) {
+      this.navigateTo("screen-auth");
+      return;
+    }
+
+    const currentUser = window.authService.getCurrentUser();
+
+    // 2. Si el usuario es Administrador Principal ('admin')
+    if (currentUser && currentUser.role === "admin") {
+      this.navigateTo("screen-admin-dashboard");
+      return;
+    }
+
+    // 3. Si el usuario es Estudiante ('user')
     const currentStudent = window.storageService.getCurrentStudent();
     if (currentStudent) {
       if (!currentStudent.diagnosticDone) {
@@ -63,6 +100,20 @@ class LeoApp {
   // =========================================================================
 
   navigateTo(screenId) {
+    // Control de seguridad por roles
+    if (screenId === "screen-admin-dashboard") {
+      if (!window.authService || !window.authService.isAdmin()) {
+        alert("🔒 Acceso Restringido: Se requiere rol de Administrador Principal.");
+        return this.navigateTo("screen-dashboard");
+      }
+    }
+
+    if (screenId !== "screen-auth") {
+      if (!window.authService || !window.authService.isAuthenticated()) {
+        return this.navigateTo("screen-auth");
+      }
+    }
+
     window.audioService.stopReading();
     window.audioService.stopOralRecording();
 
@@ -80,12 +131,48 @@ class LeoApp {
 
     this.onScreenLoaded(screenId);
     this.updateNavbarUser();
+
+    // Notificar al servidor el cambio de actividad en tiempo real
+    if (window.authService) {
+      window.authService.notifyActivity(screenId, this.getActivityName(screenId));
+    }
+  }
+
+  getActivityName(screenId) {
+    const names = {
+      "screen-auth": "En pantalla de acceso / login",
+      "screen-admin-dashboard": "Control de Administrador Principal 👑",
+      "screen-welcome": "Pantalla de bienvenida",
+      "screen-profiles": "Seleccionando perfil de estudiante",
+      "screen-create-student": "Creando nuevo estudiante",
+      "screen-diagnostic": "Realizando diagnóstico pedagógico 🟢",
+      "screen-diagnostic-result": "Revisando resultado de diagnóstico",
+      "screen-dashboard": "En el portal principal de aventuras",
+      "screen-library": "Explorando biblioteca de lecturas peruanas 🇵🇪",
+      "screen-roulette": "Girando la ruleta mágica 🎡",
+      "screen-reader": "Leyendo historia con audio y texto 📖",
+      "screen-comprehension": "Respondiendo cuestionario de 15 preguntas 🧠",
+      "screen-activity-result": "Viendo resultados de comprensión",
+      "screen-early-literacy": "En el taller de sílabas y palabras",
+      "screen-orality": "En la cabina de voz y oratoria 🎙️",
+      "screen-writing": "En el taller de escritura creativa ✍️",
+      "screen-avatar": "Personalizando avatar andino / amazónico 🦁",
+      "screen-challenges": "Viendo retos y medallas",
+      "screen-profile": "Consultando perfil y estadísticas",
+      "screen-teacher-dashboard": "En el panel docente pedagógico 👩‍🏫",
+      "screen-teacher-library": "Supervisando biblioteca docente",
+      "screen-teacher-ai-generator": "Generando lecturas con IA"
+    };
+    return names[screenId] || "Aventura en LEO";
   }
 
   onScreenLoaded(screenId) {
     const student = window.storageService.getCurrentStudent();
 
     switch (screenId) {
+      case "screen-admin-dashboard":
+        this.initAdminDashboard();
+        break;
       case "screen-dashboard":
         this.renderStudentDashboard(student);
         break;
@@ -130,20 +217,55 @@ class LeoApp {
   // =========================================================================
 
   updateNavbarUser() {
+    const isAuth = window.authService && window.authService.isAuthenticated();
+    const currentUser = isAuth ? window.authService.getCurrentUser() : null;
+    const isAdmin = isAuth && currentUser && currentUser.role === "admin";
+
+    const userChip = document.getElementById("nav-user-chip");
+    const userNameEl = document.getElementById("nav-user-name");
+    const userIconEl = document.getElementById("nav-user-icon");
+    const logoutBtn = document.getElementById("btn-nav-logout");
+    const adminNavBtn = document.getElementById("btn-nav-admin");
     const student = window.storageService.getCurrentStudent();
     const modeBtn = document.getElementById("btn-toggle-role");
     const pointsChip = document.getElementById("nav-points-chip");
     const streakChip = document.getElementById("nav-streak-chip");
     const levelChip = document.getElementById("nav-level-chip");
 
-    if (this.userMode === "TEACHER") {
+    // Chip de usuario y botón salir
+    if (isAuth && currentUser) {
+      if (userChip) {
+        userChip.style.display = "inline-flex";
+        if (userIconEl) userIconEl.innerText = isAdmin ? "👑" : "👤";
+        if (userNameEl) userNameEl.innerText = `${currentUser.displayName || currentUser.username} (${isAdmin ? 'Admin' : 'Usuario'})`;
+      }
+      if (logoutBtn) logoutBtn.style.display = "inline-block";
+      if (adminNavBtn) adminNavBtn.style.display = isAdmin ? "inline-block" : "none";
+    } else {
+      if (userChip) userChip.style.display = "none";
+      if (logoutBtn) logoutBtn.style.display = "none";
+      if (adminNavBtn) adminNavBtn.style.display = "none";
+    }
+
+    // Si estamos en la pantalla de autenticación, ocultar chips de juego
+    if (this.currentScreen === "screen-auth") {
+      if (pointsChip) pointsChip.style.display = "none";
+      if (streakChip) streakChip.style.display = "none";
+      if (levelChip) levelChip.style.display = "none";
+      if (modeBtn) modeBtn.style.display = "none";
+      return;
+    } else {
+      if (modeBtn) modeBtn.style.display = "inline-flex";
+    }
+
+    if (isAdmin || this.userMode === "TEACHER") {
       if (modeBtn) modeBtn.innerHTML = `<span>👨‍🎓 Modo Estudiante</span>`;
       if (pointsChip) pointsChip.style.display = "none";
       if (streakChip) streakChip.style.display = "none";
       if (levelChip) {
         levelChip.style.display = "inline-flex";
         levelChip.className = "stat-chip level-chip";
-        levelChip.innerHTML = `👩‍🏫 <span>Panel Docente</span>`;
+        levelChip.innerHTML = isAdmin ? `👑 <span>Admin Principal</span>` : `👩‍🏫 <span>Panel Docente</span>`;
       }
     } else {
       if (modeBtn) modeBtn.innerHTML = `<span>👩‍🏫 Modo Docente</span>`;
@@ -1908,6 +2030,529 @@ class LeoApp {
     alert("Lectura rechazada.");
     this.closeModal("modal-ai-review-editor");
     this.renderTeacherLibrary();
+  }
+
+  // =========================================================================
+  // AUTENTICACIÓN Y ROLES (LOGIN, REGISTRO, SESIÓN)
+  // =========================================================================
+
+  switchAuthTab(tab) {
+    window.audioService.playClick();
+    const loginBtn = document.getElementById("tab-btn-login");
+    const regBtn = document.getElementById("tab-btn-register");
+    const formLogin = document.getElementById("form-auth-login");
+    const formReg = document.getElementById("form-auth-register");
+    const statusBanner = document.getElementById("auth-status-banner");
+
+    if (statusBanner) statusBanner.style.display = "none";
+
+    if (tab === "login") {
+      if (loginBtn) loginBtn.classList.add("active");
+      if (regBtn) regBtn.classList.remove("active");
+      if (formLogin) formLogin.style.display = "block";
+      if (formReg) formReg.style.display = "none";
+    } else {
+      if (regBtn) regBtn.classList.add("active");
+      if (loginBtn) loginBtn.classList.remove("active");
+      if (formLogin) formLogin.style.display = "none";
+      if (formReg) formReg.style.display = "block";
+    }
+  }
+
+  selectRegRole(role) {
+    window.audioService.playClick();
+    const roleVal = document.getElementById("reg-role-value");
+    const userCard = document.getElementById("role-card-user");
+    const adminCard = document.getElementById("role-card-admin");
+
+    if (roleVal) roleVal.value = role;
+
+    if (role === "admin") {
+      if (adminCard) adminCard.classList.add("selected");
+      if (userCard) userCard.classList.remove("selected");
+    } else {
+      if (userCard) userCard.classList.add("selected");
+      if (adminCard) adminCard.classList.remove("selected");
+    }
+  }
+
+  fillDemoCredentials(username, password) {
+    window.audioService.playClick();
+    const userInput = document.getElementById("login-username");
+    const passInput = document.getElementById("login-password");
+    if (userInput) userInput.value = username;
+    if (passInput) passInput.value = password;
+  }
+
+  showAuthStatus(message, isError = true) {
+    const banner = document.getElementById("auth-status-banner");
+    if (!banner) return;
+    banner.innerText = message;
+    banner.className = isError ? "auth-status-banner error" : "auth-status-banner success";
+    banner.style.display = "block";
+  }
+
+  async handleLoginSubmit(event) {
+    event.preventDefault();
+    const userInput = document.getElementById("login-username");
+    const passInput = document.getElementById("login-password");
+    const submitBtn = document.getElementById("btn-login-submit");
+
+    if (!userInput || !passInput) return;
+
+    const username = userInput.value.trim();
+    const password = passInput.value;
+
+    if (!username || !password) {
+      this.showAuthStatus("Por favor completa todos los campos.", true);
+      return;
+    }
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerText = "Verificando credenciales... ⏳";
+    }
+
+    try {
+      const result = await window.authService.login(username, password);
+      if (result.success) {
+        window.audioService.playSuccess();
+        this.showAuthStatus("¡Inicio de sesión exitoso! Redirigiendo...", false);
+
+        setTimeout(() => {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = "Ingresar a LEO 🚀";
+          }
+          if (result.user.role === "admin") {
+            this.navigateTo("screen-admin-dashboard");
+          } else {
+            this.navigateTo("screen-dashboard");
+          }
+          this.updateNavbarUser();
+        }, 500);
+      } else {
+        window.audioService.playSoftError();
+        this.showAuthStatus(result.message || "Usuario o contraseña incorrectos.", true);
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerText = "Ingresar a LEO 🚀";
+        }
+      }
+    } catch (err) {
+      window.audioService.playSoftError();
+      this.showAuthStatus("Error de conexión: " + err.message, true);
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerText = "Ingresar a LEO 🚀";
+      }
+    }
+  }
+
+  async handleRegisterSubmit(event) {
+    event.preventDefault();
+    const userInput = document.getElementById("reg-username");
+    const nameInput = document.getElementById("reg-displayName");
+    const passInput = document.getElementById("reg-password");
+    const confirmInput = document.getElementById("reg-confirm-password");
+    const roleVal = document.getElementById("reg-role-value");
+    const submitBtn = document.getElementById("btn-register-submit");
+
+    if (!userInput || !passInput || !confirmInput) return;
+
+    const username = userInput.value.trim();
+    const displayName = nameInput ? nameInput.value.trim() : username;
+    const password = passInput.value;
+    const confirmPass = confirmInput.value;
+    const role = roleVal ? roleVal.value : "user";
+
+    if (password !== confirmPass) {
+      this.showAuthStatus("Las contraseñas no coinciden. Por favor verifica.", true);
+      return;
+    }
+
+    if (password.length < 6) {
+      this.showAuthStatus("La contraseña debe tener un mínimo de 6 caracteres.", true);
+      return;
+    }
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerText = "Registrando en MongoDB Atlas... ⏳";
+    }
+
+    try {
+      const result = await window.authService.register(username, password, role, displayName);
+      if (result.success) {
+        window.audioService.playSuccess();
+        this.showAuthStatus("¡Cuenta creada exitosamente en MongoDB Atlas! 🎉", false);
+
+        setTimeout(() => {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = "Crear mi Cuenta 🎉";
+          }
+          if (result.user.role === "admin") {
+            this.navigateTo("screen-admin-dashboard");
+          } else {
+            this.navigateTo("screen-dashboard");
+          }
+          this.updateNavbarUser();
+        }, 600);
+      } else {
+        window.audioService.playSoftError();
+        this.showAuthStatus(result.message || "No se pudo completar el registro.", true);
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerText = "Crear mi Cuenta 🎉";
+        }
+      }
+    } catch (err) {
+      window.audioService.playSoftError();
+      this.showAuthStatus("Error al registrar: " + err.message, true);
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerText = "Crear mi Cuenta 🎉";
+      }
+    }
+  }
+
+  logout() {
+    window.audioService.playClick();
+    if (confirm("¿Deseas cerrar tu sesión actual de LEO?")) {
+      window.authService.clearSession();
+      this.navigateTo("screen-auth");
+      this.updateNavbarUser();
+    }
+  }
+
+  // =========================================================================
+  // CONTROL TOTAL: PANEL DE ADMINISTRADOR PRINCIPAL
+  // =========================================================================
+
+  async initAdminDashboard() {
+    const adminUser = window.authService.getCurrentUser();
+    const adminNameEl = document.getElementById("admin-current-username");
+    if (adminNameEl && adminUser) {
+      adminNameEl.innerText = adminUser.username;
+    }
+
+    this.filterAdminReadingsDropdown();
+    await this.refreshAdminLiveUsers();
+    await this.loadMongoUsersList();
+  }
+
+  filterAdminReadingsDropdown() {
+    const selectEl = document.getElementById("admin-selected-reading");
+    const filterEl = document.getElementById("admin-filter-reading-level");
+    if (!selectEl) return;
+
+    const filterLevel = filterEl ? filterEl.value : "ALL";
+    const readings = window.storageService.getApprovedReadings();
+
+    const filtered = filterLevel === "ALL" 
+      ? readings 
+      : readings.filter(r => (r.level || "").toUpperCase() === filterLevel);
+
+    selectEl.innerHTML = filtered.map(r => {
+      const lvlIcon = r.level === "AVANZADO" ? "🔴" : (r.level === "DESARROLLO" ? "🟡" : "🟢");
+      return `<option value="${r.id}">${lvlIcon} [${r.level}] ${r.title}</option>`;
+    }).join("");
+  }
+
+  async refreshAdminLiveUsers() {
+    const dbStatusPill = document.getElementById("admin-db-status-pill");
+    const dbStatusText = document.getElementById("admin-db-status-text");
+
+    const stats = await window.authService.fetchAdminStats();
+
+    if (stats) {
+      if (dbStatusText) {
+        dbStatusText.innerText = stats.dbStatus === "connected_atlas" ? "Conectado a Atlas 🍃" : "Modo Respaldo Local 🟡";
+      }
+      if (dbStatusPill) {
+        dbStatusPill.style.background = stats.dbStatus === "connected_atlas" ? "rgba(34, 197, 94, 0.2)" : "rgba(245, 127, 23, 0.2)";
+        dbStatusPill.style.color = stats.dbStatus === "connected_atlas" ? "#4ade80" : "#fbbf24";
+      }
+
+      const totalUsersEl = document.getElementById("admin-stat-total-users");
+      if (totalUsersEl) totalUsersEl.innerText = stats.stats.totalRegisteredUsers;
+
+      const connCountEl = document.getElementById("admin-stat-connected-users");
+      if (connCountEl) connCountEl.innerText = stats.stats.connectedUsersCount;
+
+      if (stats.stats.connectedUsers) {
+        this.renderAdminLiveUsers(stats.stats.connectedUsers);
+      }
+    } else {
+      if (dbStatusText) dbStatusText.innerText = "Activo (Respaldo)";
+      this.renderAdminLiveUsers(this.adminLiveUsers.length > 0 ? this.adminLiveUsers : [
+        {
+          socketId: "socket_local",
+          username: window.authService.getCurrentUser()?.username || "admin",
+          role: "admin",
+          activeScreen: "screen-admin-dashboard",
+          currentActivity: "Panel de Control Total",
+          connectedAt: new Date().toISOString()
+        }
+      ]);
+    }
+  }
+
+  renderAdminLiveUsers(usersList) {
+    const tbody = document.getElementById("admin-live-users-table-body");
+    if (!tbody) return;
+
+    if (!usersList || usersList.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">
+            No hay usuarios conectados en este instante.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = usersList.map(u => {
+      const isMe = (window.authService.getCurrentUser()?.username === u.username);
+      const roleBadge = u.role === "admin" 
+        ? `<span class="table-role-badge admin">👑 Admin</span>` 
+        : `<span class="table-role-badge user">👤 Estudiante</span>`;
+
+      const actions = isMe ? `<span style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">(Tu sesión)</span>` : `
+        <div class="table-action-btns">
+          <button class="btn-table-action" title="Enviar Mensaje Directo" onclick="window.leoApp.promptAdminDirectMessage('${u.socketId}', '${u.username}')">
+            💬 Aviso
+          </button>
+          <button class="btn-table-action" title="Asignar Lectura Inmediata" onclick="window.leoApp.adminAssignReadingToUser('${u.socketId}', '${u.username}')">
+            📖 Asignar
+          </button>
+          <button class="btn-table-action danger" title="Forzar Desconexión" onclick="window.leoApp.adminKickUser('${u.socketId}', '${u.username}')">
+            ⚡ Kick
+          </button>
+        </div>
+      `;
+
+      return `
+        <tr>
+          <td>
+            <strong>${u.displayName || u.username}</strong>
+            <div style="font-size: 0.75rem; color: #94a3b8;">@${u.username}</div>
+          </td>
+          <td>${roleBadge}</td>
+          <td>
+            <span style="font-size: 0.85rem; font-weight: 700; color: #0288d1;">${u.currentActivity || 'En juego'}</span>
+          </td>
+          <td style="font-size: 0.8rem; color: #64748b;">En línea</td>
+          <td>${actions}</td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  async loadMongoUsersList() {
+    const tbody = document.getElementById("admin-mongo-users-table-body");
+    if (!tbody) return;
+
+    try {
+      const res = await fetch("/api/admin/users");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.users && data.users.length > 0) {
+          tbody.innerHTML = data.users.map(u => {
+            const roleBadge = u.role === "admin"
+              ? `<span class="table-role-badge admin">👑 Admin</span>`
+              : `<span class="table-role-badge user">👤 Usuario</span>`;
+            const dateStr = u.createdAt ? new Date(u.createdAt).toLocaleDateString("es-PE") : "Hoy";
+
+            return `
+              <tr>
+                <td><strong>@${u.username}</strong></td>
+                <td>${u.displayName || u.username}</td>
+                <td>${roleBadge}</td>
+                <td style="color: #64748b; font-size: 0.85rem;">${dateStr}</td>
+              </tr>
+            `;
+          }).join("");
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn("No se pudo obtener directorio de MongoDB Atlas vía REST:", e);
+    }
+
+    const defaultUsers = [
+      { username: "admin", displayName: "Administrador Principal", role: "admin", createdAt: new Date() },
+      { username: "lucia", displayName: "Lucía Quispe", role: "user", createdAt: new Date() },
+      { username: "mateo", displayName: "Mateo Flores", role: "user", createdAt: new Date() }
+    ];
+
+    tbody.innerHTML = defaultUsers.map(u => `
+      <tr>
+        <td><strong>@${u.username}</strong></td>
+        <td>${u.displayName}</td>
+        <td>${u.role === 'admin' ? '<span class="table-role-badge admin">👑 Admin</span>' : '<span class="table-role-badge user">👤 Usuario</span>'}</td>
+        <td style="color: #64748b; font-size: 0.85rem;">Activo</td>
+      </tr>
+    `).join("");
+  }
+
+  adminBroadcastSelectedReading() {
+    window.audioService.playClick();
+    const selectEl = document.getElementById("admin-selected-reading");
+    if (!selectEl) return;
+
+    const readingId = selectEl.value;
+    const reading = window.storageService.getReadingById(readingId);
+
+    if (!reading) {
+      alert("Por favor selecciona una lectura válida.");
+      return;
+    }
+
+    if (socket && socket.connected) {
+      socket.emit("admin:broadcast-reading", {
+        readingId: reading.id,
+        readingTitle: reading.title,
+        level: reading.level
+      }, (res) => {
+        window.audioService.playSuccess();
+        alert(`🚀 ¡Lectura asignada con éxito!\n"${reading.title}" fue enviada en tiempo real a las pantallas de los estudiantes.`);
+      });
+    } else {
+      window.audioService.playSuccess();
+      alert(`🚀 Modo local: Lectura "${reading.title}" lista para asignación masiva.`);
+    }
+  }
+
+  adminAssignReadingToUser(targetSocketId, targetUsername) {
+    const selectEl = document.getElementById("admin-selected-reading");
+    const readingId = selectEl ? selectEl.value : null;
+    const reading = readingId ? window.storageService.getReadingById(readingId) : null;
+
+    if (!reading) {
+      alert("Selecciona primero una lectura en el panel de control.");
+      return;
+    }
+
+    if (confirm(`¿Asignar la lectura "${reading.title}" directamente al estudiante @${targetUsername}?`)) {
+      if (socket && socket.connected) {
+        socket.emit("admin:broadcast-reading", {
+          readingId: reading.id,
+          readingTitle: reading.title,
+          level: reading.level,
+          targetSocketId
+        });
+      }
+      alert(`Lectura enviada al usuario @${targetUsername}.`);
+    }
+  }
+
+  adminKickUser(targetSocketId, targetUsername) {
+    window.audioService.playClick();
+    if (confirm(`¿Estás seguro de expulsar y desconectar de inmediato al usuario @${targetUsername}?`)) {
+      if (socket && socket.connected) {
+        socket.emit("admin:kick-user", {
+          targetSocketId,
+          reason: "Un Administrador Principal ha finalizado tu sesión por moderación de aula."
+        }, (res) => {
+          alert(`Usuario @${targetUsername} desconectado.`);
+          this.refreshAdminLiveUsers();
+        });
+      } else {
+        alert(`Sesión de @${targetUsername} finalizada.`);
+      }
+    }
+  }
+
+  promptAdminDirectMessage(targetSocketId, targetUsername) {
+    window.audioService.playClick();
+    const msg = prompt(`Escribe un mensaje de moderación u orientación para @${targetUsername}:`);
+    if (msg && msg.trim()) {
+      if (socket && socket.connected) {
+        socket.emit("admin:send-direct-message", {
+          targetSocketId,
+          title: "Mensaje de Moderación de LEO",
+          message: msg.trim()
+        });
+        alert(`Mensaje enviado exitosamente a @${targetUsername}.`);
+      } else {
+        alert("Mensaje simulado enviado.");
+      }
+    }
+  }
+
+  handleBroadcastAnnouncement(event) {
+    event.preventDefault();
+    const titleInput = document.getElementById("admin-broadcast-title");
+    const msgInput = document.getElementById("admin-broadcast-msg");
+    const typeSelect = document.getElementById("admin-broadcast-type");
+
+    if (!titleInput || !msgInput) return;
+
+    const title = titleInput.value.trim();
+    const message = msgInput.value.trim();
+    const type = typeSelect ? typeSelect.value : "info";
+
+    if (!title || !message) return;
+
+    if (socket && socket.connected) {
+      socket.emit("admin:broadcast-message", { title, message, type }, (res) => {
+        window.audioService.playSuccess();
+        alert(`📢 ¡Anuncio transmitido exitosamente a todos los dispositivos conectados!`);
+        titleInput.value = "";
+        msgInput.value = "";
+      });
+    } else {
+      window.audioService.playSuccess();
+      this.showSystemAnnouncement({ title, message, type });
+      titleInput.value = "";
+      msgInput.value = "";
+    }
+  }
+
+  // =========================================================================
+  // RECEPCIÓN DE MENSAJES Y ASIGNACIONES EN TIEMPO REAL (ESTUDIANTE)
+  // =========================================================================
+
+  showSystemAnnouncement(data) {
+    window.audioService.playCelebrationFanfare();
+    const modal = document.getElementById("modal-system-announcement");
+    const titleEl = document.getElementById("announcement-title");
+    const bodyEl = document.getElementById("announcement-body");
+    const iconEl = document.getElementById("announcement-icon");
+
+    if (titleEl) titleEl.innerText = data.title || "Aviso de Leo 🇵🇪";
+    if (bodyEl) bodyEl.innerText = data.message || "";
+    if (iconEl) {
+      iconEl.innerText = data.type === "success" ? "🌟" : (data.type === "warning" ? "⚠️" : "📢");
+    }
+
+    if (modal) modal.classList.add("active");
+  }
+
+  showDirectMessageModal(data) {
+    window.audioService.playSuccess();
+    const modal = document.getElementById("modal-direct-message");
+    const titleEl = document.getElementById("direct-msg-title");
+    const bodyEl = document.getElementById("direct-msg-body");
+
+    if (titleEl) titleEl.innerText = data.title || "Mensaje del Administrador";
+    if (bodyEl) bodyEl.innerText = data.message || "";
+
+    if (modal) modal.classList.add("active");
+  }
+
+  handleAssignedReading(data) {
+    window.audioService.playCelebrationFanfare();
+    const readingId = data.readingId;
+    const readingTitle = data.readingTitle || "Lectura recomendada";
+
+    const proceed = confirm(`👑 ¡NUEVA LECTURA ASIGNADA EN VIVO!\n\nEl Administrador Principal te ha asignado:\n"${readingTitle}"\n\n¿Deseas comenzar a leerla ahora mismo?`);
+    if (proceed && readingId) {
+      this.openReading(readingId);
+    }
   }
 }
 

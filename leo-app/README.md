@@ -98,49 +98,82 @@ Abre automáticamente `http://localhost:8080/`.
 
 ---
 
-## 🔐 7. Arquitectura de Autenticación, Roles y Persistencia en MongoDB Atlas
+## 🔐 7. Arquitectura de Autenticación Multi-Rol y Persistencia en MongoDB Atlas
 
-La versión 2.0 de LEO incluye una arquitectura cliente-servidor robusta con:
+La plataforma LEO implementa un sistema de autenticación multi-rol con tres tipos de accesos diferenciados y persistencia en MongoDB Atlas:
 
-### 🍃 Persistencia con MongoDB Atlas & Mongoose
-- **Mongoose ODM**: Conexión a MongoDB Atlas mediante `process.env.MONGODB_URI`.
+### 👥 1. Roles y Permisos
+
+| Rol | Identificador | Acceso y Permisos |
+|---|---|---|
+| **Estudiante** | `'estudiante'` (o `'user'`) | **Acceso exclusivo a la interfaz de juego**: evaluación diagnóstica, ruleta mágica, 15 preguntas por lectura con comodín pedagógico, talleres de sílabas/escritura, cabina de voz y personalización de avatar. Bloqueado estrictamente de paneles docentes o administrativos. |
+| **Maestro** | `'maestro'` | **Acceso al Panel Docente (`screen-teacher-dashboard`)**: seguimiento individual y grupal de alumnos, métricas del aula (comprensión literal e inferencial), alertas y recomendaciones pedagógicas generadas por IA, revisión de lecturas pendientes y **asignación en tiempo real de actividades y lecturas al aula**. Bloqueado de funciones administrativas globales. |
+| **Administrador Principal** | `'admin'` | **Control Total de la Aplicación (`screen-admin-dashboard`)**: gestión global del directorio de usuarios en MongoDB con cambio dinámico de rol (`estudiante` ↔ `maestro` ↔ `admin`), monitor en tiempo real de usuarios conectados con desconexión forzada (Kick), difusión global de anuncios institucionales, asignación de lecturas y métricas de servidor. |
+
+---
+
+### 🔑 2. Cuentas Predeterminadas (Auto-creadas al Iniciar el Servidor)
+
+Al arrancar `server.js` (o en modo local de contingencia), el sistema verifica y crea automáticamente las cuentas por defecto si no existen:
+
+| Tipo de Acceso | Usuario | Contraseña | Rol Asignado |
+|---|---|---|---|
+| 👑 **Administrador Principal** | `admin` | `admin123` | `admin` |
+| 👩‍🏫 **Maestro de Ejemplo** | `maestro` | `maestro123` | `maestro` |
+| 🧒 **Estudiante de Ejemplo** | `estudiante` | `estudiante123` | `estudiante` |
+
+> En la pantalla de autenticación (`index.html`) existen botones de **"Acceso Rápido Demo"** para ingresar directamente con cualquiera de los 3 roles con 1 solo clic.
+
+---
+
+### 🍃 3. Base de Datos y Backend (`server.js`)
+- **Conexión Mongoose**: Utiliza la variable de entorno `process.env.MONGODB_URI` para conectar con MongoDB Atlas.
 - **Modelo de Usuario (`User`)**:
-  - `username` (String, único, en minúsculas, validado).
-  - `password` (String, encriptada con `bcryptjs` con 10 rondas de salt).
-  - `role` (String, `'admin'` o `'user'`).
+  - `username`: String único, en minúsculas, requerido.
+  - `password`: Encriptada de forma segura con `bcryptjs` (salt de 10 rondas).
+  - `role`: Enum `['estudiante', 'maestro', 'admin', 'user']`.
   - `displayName`, `profile`, `createdAt`, `lastLogin`.
-- **Administrador Principal por Defecto**:
-  Al arrancar el servidor `server.js`, verifica automáticamente si existe el administrador; si no existe, lo crea con:
-  - **Usuario:** `admin`
-  - **Contraseña:** `admin123`
-  - **Rol:** `admin`
+- **API REST y Seguridad**:
+  - `POST /api/auth/register`: Registro de nuevas cuentas con selección de rol.
+  - `POST /api/auth/login`: Autenticación con verificación por `bcryptjs` y emisión de tokens JWT.
+  - `GET /api/auth/me`: Verificación de sesión activa.
+  - `POST /api/admin/change-role`: Reasignación de roles por parte del administrador, con notificación en vivo vía Socket.io (`auth:role-updated`).
+  - `GET /api/admin/stats`: Estadísticas consolidadas con distribución por rol.
+- **Canal en Tiempo Real (Socket.io)**:
+  - Evento `admin:broadcast-reading`: Envía lecturas asignadas desde el panel de Maestro o Admin a las pantallas activas de los estudiantes.
+  - Evento `admin:broadcast-message`: Emite anuncios institucionales emergentes a toda el aula.
+  - Sincronización en vivo de usuarios conectados con control de desconexión.
 
-### 👥 Manejo de Roles
-1. **Rol Usuario / Estudiante (`user`)**:
-   - Acceso inmediato al mundo de aprendizaje interactivo.
-   - Evaluación diagnóstica, ruleta de lectura, 15 preguntas con comodín y retroalimentación pedagógica.
-   - Guardado automático de sesión en `localStorage` (`leo_auth_session`).
-2. **Rol Administrador Principal (`admin`)**:
-   - **Panel de Control Total (`screen-admin-dashboard`)**:
-     - **Gestión de usuarios en vivo**: Monitor en tiempo real de estudiantes conectados vía Socket.io.
-     - **Moderación instantánea**: Capacidad de enviar avisos directos o forzar desconexión (Kick) a usuarios activos.
-     - **Asignación en vivo**: Lanzar lecturas o actividades sincrónicas a todos los estudiantes con 1 clic.
-     - **Difusión global**: Transmisión de anuncios y retos a todas las pantallas conectadas.
-     - **Estadísticas generales**: Métricas en tiempo real de registros en MongoDB Atlas, usuarios en línea y catálogo.
+---
 
-### 🚀 Cómo Ejecutar con Node.js y MongoDB Atlas
-1. Copia `.env.example` a `.env` y define tu cadena de conexión:
+### 🖥️ 4. Cliente y Experiencia de Usuario (`index.html` y `js/app.js`)
+- **Formulario Unificado de Login / Registro**: Selector de roles interactivo en el registro y atajos de demostración rápida.
+- **Redirección Automática**:
+  - `estudiante` ➡️ Pantalla de Bienvenida (`screen-welcome`) o Portal de Aventuras (`screen-dashboard`).
+  - `maestro` ➡️ Panel Docente de Seguimiento (`screen-teacher-dashboard`).
+  - `admin` ➡️ Panel de Administrador Principal (`screen-admin-dashboard`).
+- **Persistencia de Sesión**: Guardado seguro en `localStorage` bajo la clave `leo_auth_session`.
+- **Protección de Rutas**: Guardianes de navegación en `navigateTo()` que impiden a estudiantes entrar a paneles de docentes/administradores y a docentes entrar a la administración del servidor.
+
+---
+
+### 🚀 5. Cómo Ejecutar con Node.js y MongoDB Atlas
+1. Copia `.env.example` a `.env` y configura tu cadena de conexión de MongoDB Atlas:
    ```env
    PORT=8080
    MONGODB_URI=mongodb+srv://<usuario>:<password>@cluster0.mongodb.net/leo_db?retryWrites=true&w=majority
    JWT_SECRET=tu_clave_secreta_jwt
    ```
-2. Instala dependencias y arranca el servidor:
+2. Instala las dependencias necesarias:
    ```bash
    npm install
+   ```
+   *(Asegura: `mongoose`, `bcryptjs`, `jsonwebtoken`, `dotenv`, `cors`, `express`, `socket.io`)*
+3. Inicia el servidor:
+   ```bash
    npm start
    ```
-3. Accede en tu navegador a:
+4. Ingresa en tu navegador a:
    `http://localhost:8080/`
 
 ---

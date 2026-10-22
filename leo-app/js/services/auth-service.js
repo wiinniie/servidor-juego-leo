@@ -76,8 +76,16 @@ class AuthService {
     return this.isAuthenticated() && this.currentUser.role === "admin";
   }
 
+  isTeacher() {
+    return this.isAuthenticated() && (this.currentUser.role === "maestro" || this.currentUser.role === "teacher" || this.currentUser.role === "docente");
+  }
+
+  isStudent() {
+    return this.isAuthenticated() && (this.currentUser.role === "estudiante" || this.currentUser.role === "user");
+  }
+
   isUser() {
-    return this.isAuthenticated() && this.currentUser.role === "user";
+    return this.isStudent();
   }
 
   getCurrentUser() {
@@ -99,6 +107,19 @@ class AuthService {
     this.socket.on("disconnect", () => {
       this.isBackendOnline = false;
       console.log("🔌 [Socket.io] Desconectado del servidor LEO");
+    });
+
+    // Evento de actualización de rol en tiempo real por el Administrador
+    this.socket.on("auth:role-updated", (data) => {
+      alert(`🔔 ACTUALIZACIÓN DE ROL:\n${data.message || `Tu rol ha sido actualizado a "${data.newRole}".`}`);
+      if (this.currentUser) {
+        this.currentUser.role = data.newRole;
+        this.saveSession(this.currentUser, this.token);
+      }
+      if (window.leoApp) {
+        window.leoApp.checkInitialScreen();
+        window.leoApp.updateNavbarUser();
+      }
     });
 
     // Evento de moderación: cuando el Administrador Principal expulsa al usuario
@@ -125,7 +146,7 @@ class AuthService {
       }
     });
 
-    // Evento de lectura asignada en tiempo real por el Administrador
+    // Evento de lectura asignada en tiempo real por el Maestro o Administrador
     this.socket.on("student:assigned-reading", (data) => {
       if (window.leoApp && typeof window.leoApp.handleAssignedReading === "function") {
         window.leoApp.handleAssignedReading(data);
@@ -153,7 +174,6 @@ class AuthService {
         }
       } else {
         const errData = await response.json().catch(() => ({}));
-        // Si el servidor respondió con un error formal (ej. contraseña incorrecta)
         if (response.status === 401 || response.status === 400 || response.status === 404) {
           return {
             success: false,
@@ -182,8 +202,8 @@ class AuthService {
       });
     }
 
-    // Fallback de contingencia local: si el servidor backend aún no se ha levantado
-    // Permite validar de inmediato las credenciales por defecto especificadas
+    // Fallback de contingencia local: permite validar de inmediato las credenciales por defecto especificadas
+    // 1. Admin Principal: admin / admin123
     if (cleanUser === "admin" && password === "admin123") {
       const mockAdmin = {
         id: "mem_admin_001",
@@ -195,7 +215,39 @@ class AuthService {
       return {
         success: true,
         user: mockAdmin,
-        message: "Inicio de sesión concedido como Administrador Principal (Modo Local)."
+        message: "Bienvenido, Administrador Principal (Control Total)."
+      };
+    }
+
+    // 2. Maestro Ejemplo: maestro / maestro123
+    if (cleanUser === "maestro" && password === "maestro123") {
+      const mockTeacher = {
+        id: "mem_teacher_001",
+        username: "maestro",
+        role: "maestro",
+        displayName: "Maestro de Aula LEO"
+      };
+      this.saveSession(mockTeacher, "mock_token_teacher_2026");
+      return {
+        success: true,
+        user: mockTeacher,
+        message: "Bienvenido, Maestro. Accediendo al Panel Pedagógico."
+      };
+    }
+
+    // 3. Estudiante Ejemplo: estudiante / estudiante123 o mateo / 123456
+    if ((cleanUser === "estudiante" && password === "estudiante123") || (cleanUser === "mateo" && password === "123456") || (cleanUser === "lucia" && password === "123456")) {
+      const mockStudent = {
+        id: "mem_student_" + cleanUser,
+        username: cleanUser,
+        role: "estudiante",
+        displayName: cleanUser === "mateo" ? "Mateo Flores" : (cleanUser === "lucia" ? "Lucía Quispe" : "Estudiante Ejemplo")
+      };
+      this.saveSession(mockStudent, "mock_token_student_" + cleanUser);
+      return {
+        success: true,
+        user: mockStudent,
+        message: "¡Hola! Bienvenido a tu aventura de lectura."
       };
     }
 
@@ -218,10 +270,36 @@ class AuthService {
     };
   }
 
+  // Cambiar rol de usuario (solo Administrador Principal)
+  async changeUserRole(username, newRole) {
+    try {
+      const res = await fetch("/api/admin/change-role", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, newRole })
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn("Fallo REST en cambio de rol, intentando fallback:", e);
+    }
+
+    // Local fallback
+    const savedUsersRaw = localStorage.getItem("leo_local_registered_users");
+    const localUsers = savedUsersRaw ? JSON.parse(savedUsersRaw) : [];
+    const target = localUsers.find(u => u.username === username);
+    if (target) {
+      target.role = newRole;
+      localStorage.setItem("leo_local_registered_users", JSON.stringify(localUsers));
+    }
+    return { success: true, message: `Rol de @${username} actualizado a ${newRole}.` };
+  }
+
   // 4. Registro de usuarios (Register)
-  async register(username, password, role = "user", displayName = "") {
+  async register(username, password, role = "estudiante", displayName = "") {
     const cleanUser = String(username).trim().toLowerCase();
-    const cleanRole = role === "admin" ? "admin" : "user";
+    const cleanRole = role === "admin" ? "admin" : (role === "maestro" ? "maestro" : "estudiante");
 
     // Intentar vía REST API
     try {

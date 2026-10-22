@@ -62,8 +62,8 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['admin', 'user'],
-    default: 'user'
+    enum: ['estudiante', 'maestro', 'admin', 'user'],
+    default: 'estudiante'
   },
   displayName: {
     type: String,
@@ -87,6 +87,14 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model('User', userSchema);
 
+// Función auxiliar para normalizar roles
+function normalizeRole(role) {
+  const r = String(role || '').toLowerCase().trim();
+  if (r === 'admin' || r === 'administrador') return 'admin';
+  if (r === 'maestro' || r === 'profesor' || r === 'docente' || r === 'teacher') return 'maestro';
+  return 'estudiante';
+}
+
 // Almacén en memoria de usuarios conectados en tiempo real
 // socketId -> { socketId, userId, username, role, connectedAt, activeScreen, currentActivity, ip }
 const connectedUsers = new Map();
@@ -98,57 +106,76 @@ let isMongoConnected = false;
 const inMemoryFallbackUsers = new Map();
 
 // =========================================================================
-// 2. CONEXIÓN A MONGODB ATLAS Y CREACIÓN DE ADMIN POR DEFECTO
+// 2. CONEXIÓN A MONGODB ATLAS Y CREACIÓN DE CUENTAS POR DEFECTO
 // =========================================================================
 
-async function ensureDefaultAdmin() {
-  try {
-    const adminUsername = 'admin';
-    const adminPasswordPlain = 'admin123';
-    const adminRole = 'admin';
-
-    let existingAdmin = null;
-
-    if (isMongoConnected) {
-      existingAdmin = await User.findOne({ username: adminUsername });
-      if (!existingAdmin) {
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(adminPasswordPlain, salt);
-
-        const newAdmin = new User({
-          username: adminUsername,
-          password: hashedPassword,
-          role: adminRole,
-          displayName: 'Administrador Principal LEO'
-        });
-
-        await newAdmin.save();
-        console.log('------------------------------------------------------------');
-        console.log('👑 [ADMIN CREADO] Administrador Principal creado con éxito:');
-        console.log(`   - Usuario:    ${adminUsername}`);
-        console.log(`   - Contraseña: ${adminPasswordPlain}`);
-        console.log(`   - Rol:        ${adminRole}`);
-        console.log('------------------------------------------------------------');
-      } else {
-        console.log('✅ [ADMIN VERIFICADO] Administrador Principal ya registrado en MongoDB.');
-      }
-    } else {
-      // Fallback en memoria si MongoDB Atlas aún no está configurado
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(adminPasswordPlain, salt);
-      inMemoryFallbackUsers.set(adminUsername, {
-        _id: 'mem_admin_001',
-        username: adminUsername,
-        password: hashedPassword,
-        role: adminRole,
-        displayName: 'Administrador Principal (Modo Local)',
-        createdAt: new Date(),
-        lastLogin: new Date()
-      });
-      console.log('ℹ️ [ADMIN LOCAL] Usuario admin/admin123 cargado en memoria de respaldo.');
+async function ensureDefaultAccounts() {
+  const defaultAccounts = [
+    {
+      username: 'admin',
+      passwordPlain: 'admin123',
+      role: 'admin',
+      displayName: 'Administrador Principal LEO'
+    },
+    {
+      username: 'maestro',
+      passwordPlain: 'maestro123',
+      role: 'maestro',
+      displayName: 'Maestro de Aula LEO'
+    },
+    {
+      username: 'estudiante',
+      passwordPlain: 'estudiante123',
+      role: 'estudiante',
+      displayName: 'Estudiante Ejemplo'
     }
-  } catch (err) {
-    console.error('❌ Error al verificar o crear el administrador por defecto:', err.message);
+  ];
+
+  for (const acc of defaultAccounts) {
+    try {
+      if (isMongoConnected) {
+        let existing = await User.findOne({ username: acc.username });
+        if (!existing) {
+          const salt = await bcrypt.genSalt(10);
+          const hashedPassword = await bcrypt.hash(acc.passwordPlain, salt);
+
+          const newUser = new User({
+            username: acc.username,
+            password: hashedPassword,
+            role: acc.role,
+            displayName: acc.displayName
+          });
+
+          await newUser.save();
+          console.log(`👑 [CUENTA CREADA] ${acc.displayName}:`);
+          console.log(`   - Usuario:    ${acc.username}`);
+          console.log(`   - Contraseña: ${acc.passwordPlain}`);
+          console.log(`   - Rol:        ${acc.role}`);
+        } else {
+          if (existing.role !== acc.role) {
+            existing.role = acc.role;
+            await existing.save();
+          }
+          console.log(`✅ [CUENTA ACTIVA] ${acc.username} (${acc.role}) verificado en MongoDB.`);
+        }
+      } else {
+        // Modo local en memoria
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(acc.passwordPlain, salt);
+        inMemoryFallbackUsers.set(acc.username, {
+          _id: 'mem_' + acc.username,
+          username: acc.username,
+          password: hashedPassword,
+          role: acc.role,
+          displayName: acc.displayName,
+          createdAt: new Date(),
+          lastLogin: new Date()
+        });
+        console.log(`ℹ️ [CUENTA LOCAL] ${acc.username} (${acc.role}) cargado en memoria de respaldo.`);
+      }
+    } catch (err) {
+      console.error(`❌ Error al crear cuenta por defecto (${acc.username}):`, err.message);
+    }
   }
 }
 
@@ -162,13 +189,13 @@ async function connectToMongoDB() {
     console.log('============================================================');
     console.log('🟢 [MONGODB ATLAS] Conexión establecida exitosamente.');
     console.log('============================================================');
-    await ensureDefaultAdmin();
+    await ensureDefaultAccounts();
   } catch (error) {
     isMongoConnected = false;
     console.warn('⚠️ [AVISO MONGODB] No se pudo conectar a MongoDB Atlas:', error.message);
     console.warn('ℹ️ El servidor continuará operando en modo local con almacenamiento de respaldo.');
     console.warn('💡 Para conectar Atlas, verifica tu variable MONGODB_URI en el archivo .env');
-    await ensureDefaultAdmin();
+    await ensureDefaultAccounts();
   }
 }
 
@@ -194,7 +221,7 @@ async function createUserRecord({ username, password, role, displayName }) {
   const cleanUsername = String(username).trim().toLowerCase();
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(password, salt);
-  const userRole = role === 'admin' ? 'admin' : 'user';
+  const userRole = normalizeRole(role);
 
   if (isMongoConnected) {
     const newUser = new User({
@@ -400,16 +427,18 @@ app.get('/api/auth/me', async (req, res) => {
 app.get('/api/admin/stats', async (req, res) => {
   try {
     let totalRegistered = 0;
-    let usersByRole = { admin: 0, user: 0 };
+    let usersByRole = { admin: 0, maestro: 0, estudiante: 0 };
 
     if (isMongoConnected) {
       totalRegistered = await User.countDocuments();
       usersByRole.admin = await User.countDocuments({ role: 'admin' });
-      usersByRole.user = await User.countDocuments({ role: 'user' });
+      usersByRole.maestro = await User.countDocuments({ role: { $in: ['maestro', 'docente', 'teacher'] } });
+      usersByRole.estudiante = await User.countDocuments({ role: { $in: ['estudiante', 'user'] } });
     } else {
       totalRegistered = inMemoryFallbackUsers.size;
       for (const u of inMemoryFallbackUsers.values()) {
-        usersByRole[u.role] = (usersByRole[u.role] || 0) + 1;
+        const norm = normalizeRole(u.role);
+        usersByRole[norm] = (usersByRole[norm] || 0) + 1;
       }
     }
 
@@ -422,7 +451,8 @@ app.get('/api/admin/stats', async (req, res) => {
         totalRegisteredUsers: totalRegistered,
         connectedUsersCount: connectedList.length,
         adminCount: usersByRole.admin,
-        studentCount: usersByRole.user,
+        teacherCount: usersByRole.maestro,
+        studentCount: usersByRole.estudiante,
         connectedUsers: connectedList
       }
     });
@@ -448,6 +478,61 @@ app.get('/api/admin/users', async (req, res) => {
       }));
     }
     return res.json({ success: true, users: usersList });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// MODIFICAR/ASIGNAR ROL DE USUARIO (CONTROL TOTAL DE ADMINISTRADOR PRINCIPAL)
+app.post('/api/admin/change-role', async (req, res) => {
+  try {
+    const { username, newRole } = req.body;
+    if (!username || !newRole) {
+      return res.status(400).json({ success: false, message: 'Usuario y nuevo rol requeridos.' });
+    }
+
+    const cleanUsername = String(username).toLowerCase().trim();
+    const cleanRole = normalizeRole(newRole);
+
+    let updatedUser = null;
+    if (isMongoConnected) {
+      updatedUser = await User.findOneAndUpdate(
+        { username: cleanUsername },
+        { role: cleanRole },
+        { new: true }
+      );
+    } else {
+      const u = inMemoryFallbackUsers.get(cleanUsername);
+      if (u) {
+        u.role = cleanRole;
+        updatedUser = u;
+      }
+    }
+
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: 'Usuario no encontrado.' });
+    }
+
+    // Actualizar rol en sockets conectados y emitir notificación en tiempo real
+    for (const [sId, entry] of connectedUsers.entries()) {
+      if (entry.username === cleanUsername) {
+        entry.role = cleanRole;
+        io.to(sId).emit('auth:role-updated', {
+          newRole: cleanRole,
+          message: `Tu rol ha sido actualizado a "${cleanRole.toUpperCase()}" por el Administrador Principal.`
+        });
+      }
+    }
+    broadcastAdminUpdate();
+
+    return res.json({
+      success: true,
+      message: `Rol del usuario @${cleanUsername} modificado exitosamente a "${cleanRole}".`,
+      user: {
+        username: updatedUser.username,
+        role: updatedUser.role
+      }
+    });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -574,6 +659,13 @@ io.on('connection', (socket) => {
         displayName: user.displayName || user.username
       };
 
+      const initialScreen = user.role === 'admin' 
+        ? 'screen-admin-dashboard' 
+        : (user.role === 'maestro' ? 'screen-teacher-dashboard' : 'screen-dashboard');
+      const initialActivity = user.role === 'admin' 
+        ? 'Panel de Control Principal 👑' 
+        : (user.role === 'maestro' ? 'Seguimiento Docente 👩‍🏫' : 'En el portal de lectura 🧒');
+
       connectedUsers.set(socket.id, {
         socketId: socket.id,
         userId: user._id,
@@ -581,12 +673,14 @@ io.on('connection', (socket) => {
         role: user.role,
         displayName: userPayload.displayName,
         connectedAt: new Date(),
-        activeScreen: user.role === 'admin' ? 'screen-admin-dashboard' : 'screen-dashboard',
-        currentActivity: user.role === 'admin' ? 'Panel de Control Principal' : 'En el portal de lectura'
+        activeScreen: initialScreen,
+        currentActivity: initialActivity
       });
 
       if (user.role === 'admin') {
         socket.join('admin_room');
+      } else if (user.role === 'maestro') {
+        socket.join('teacher_room');
       }
 
       broadcastAdminUpdate();
@@ -725,12 +819,12 @@ io.on('connection', (socket) => {
 
   // Asignar lectura en tiempo real a todos los estudiantes o uno específico
   socket.on('admin:broadcast-reading', (data, callback) => {
-    const { readingId, readingTitle, level, targetSocketId } = data || {};
+    const { readingId, readingTitle, level, targetSocketId, assignedBy } = data || {};
     const payload = {
       readingId,
       readingTitle,
       level,
-      assignedBy: 'Administrador Principal',
+      assignedBy: assignedBy || 'Docente / Administrador',
       timestamp: new Date().toISOString()
     };
 

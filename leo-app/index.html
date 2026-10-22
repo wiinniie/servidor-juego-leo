@@ -52,11 +52,17 @@
       <button id="btn-nav-admin" class="btn-primary" style="display: none; padding: 7px 14px; font-size: 0.88rem; background: #0f172a;" title="Panel de Administrador Principal" onclick="window.leoApp.navigateTo('screen-admin-dashboard')">
         👑 Panel Admin
       </button>
+      <button id="btn-nav-teacher" class="btn-secondary" style="display: none; padding: 7px 14px; font-size: 0.88rem;" title="Panel Docente de Seguimiento" onclick="window.leoApp.navigateTo('screen-teacher-dashboard')">
+        👩‍🏫 Panel Maestro
+      </button>
+      <button id="btn-nav-game" class="btn-outline" style="display: none; padding: 7px 14px; font-size: 0.88rem;" title="Ir al Juego de Leo" onclick="window.leoApp.navigateTo('screen-dashboard')">
+        🎮 Vista Juego
+      </button>
       <button id="btn-nav-profiles" class="btn-icon" title="Cambiar estudiante"
         onclick="window.leoApp.navigateTo('screen-profiles')">
         👥
       </button>
-      <button id="btn-toggle-role" class="btn-mode-toggle">
+      <button id="btn-toggle-role" class="btn-mode-toggle" style="display: none;">
         👩‍🏫 Modo Docente
       </button>
       <button id="btn-nav-logout" class="btn-outline" style="padding: 6px 12px; font-size: 0.85rem; display: none;" title="Cerrar sesión" onclick="window.leoApp.logout()">
@@ -71,7 +77,7 @@
   <main class="app-container">
 
     <!-- =========================================================================
-         PANTALLA DE AUTENTICACIÓN (LOGIN Y REGISTRO CON ROLES)
+         PANTALLA DE AUTENTICACIÓN (LOGIN Y REGISTRO CON 3 ROLES)
          ========================================================================= -->
     <section id="screen-auth" class="app-screen">
       <div class="auth-screen-container">
@@ -81,7 +87,7 @@
               <img src="assets/leo-logo.png" alt="Logo de Leo" class="auth-logo-img">
             </div>
             <h1 class="auth-title">Bienvenido a <span class="leo-orange">LEO</span></h1>
-            <p class="auth-subtitle">Ingresa a tu cuenta o regístrate para iniciar tu aventura de lectura 🇵🇪</p>
+            <p class="auth-subtitle">Sistema Multi-Rol • Estudiante, Maestro y Administrador 🇵🇪</p>
           </div>
 
           <!-- Selector de pestañas: Iniciar Sesión / Registro -->
@@ -101,7 +107,7 @@
           <form id="form-auth-login" onsubmit="window.leoApp.handleLoginSubmit(event)">
             <div class="auth-form-group">
               <label class="auth-label" for="login-username">Usuario:</label>
-              <input type="text" id="login-username" class="auth-input" placeholder="Ej. admin o tu nombre de usuario" autocomplete="username" required>
+              <input type="text" id="login-username" class="auth-input" placeholder="Ej. admin, maestro o tu usuario" autocomplete="username" required>
             </div>
 
             <div class="auth-form-group">
@@ -114,13 +120,16 @@
             </button>
 
             <div class="auth-demo-chips">
-              <div class="auth-demo-label">⚡ Acceso Rápido de Prueba:</div>
+              <div class="auth-demo-label">⚡ Accesos Directos por Rol (Prueba Rápida):</div>
               <div class="auth-demo-buttons">
                 <button type="button" class="auth-demo-btn" onclick="window.leoApp.fillDemoCredentials('admin', 'admin123')">
                   👑 Admin (admin / admin123)
                 </button>
-                <button type="button" class="auth-demo-btn" onclick="window.leoApp.fillDemoCredentials('mateo', '123456')">
-                  👤 Estudiante (mateo / 123456)
+                <button type="button" class="auth-demo-btn" onclick="window.leoApp.fillDemoCredentials('maestro', 'maestro123')">
+                  👩‍🏫 Maestro (maestro / maestro123)
+                </button>
+                <button type="button" class="auth-demo-btn" onclick="window.leoApp.fillDemoCredentials('estudiante', 'estudiante123')">
+                  🧒 Estudiante (estudiante / estudiante123)
                 </button>
               </div>
             </div>
@@ -130,12 +139,12 @@
           <form id="form-auth-register" style="display: none;" onsubmit="window.leoApp.handleRegisterSubmit(event)">
             <div class="auth-form-group">
               <label class="auth-label" for="reg-username">Nombre de Usuario:</label>
-              <input type="text" id="reg-username" class="auth-input" placeholder="Mínimo 3 caracteres (ej. lucia_q)" autocomplete="username" required minlength="3">
+              <input type="text" id="reg-username" class="auth-input" placeholder="Mínimo 3 caracteres (ej. prof_maria)" autocomplete="username" required minlength="3">
             </div>
 
             <div class="auth-form-group">
-              <label class="auth-label" for="reg-displayName">Nombre Completo o Apodo:</label>
-              <input type="text" id="reg-displayName" class="auth-input" placeholder="Ej. Lucía Quispe" autocomplete="name">
+              <label class="auth-label" for="reg-displayName">Nombre Completo:</label>
+              <input type="text" id="reg-displayName" class="auth-input" placeholder="Ej. Prof. María Morales" autocomplete="name">
             </div>
 
             <div class="auth-form-group">
@@ -149,20 +158,25 @@
             </div>
 
             <div class="auth-form-group">
-              <label class="auth-label">Tipo de Rol en la Plataforma:</label>
-              <div class="role-selector-wrap">
-                <div id="role-card-user" class="role-option-card selected" onclick="window.leoApp.selectRegRole('user')">
-                  <span class="role-option-icon">👤</span>
-                  <div class="role-option-title">Estudiante / Usuario</div>
-                  <div style="font-size: 0.78rem; color: #64748b;">Acceso al juego y lecturas</div>
+              <label class="auth-label">Selecciona tu Rol de Acceso:</label>
+              <div class="role-selector-wrap" style="grid-template-columns: repeat(3, 1fr);">
+                <div id="role-card-estudiante" class="role-option-card selected" onclick="window.leoApp.selectRegRole('estudiante')">
+                  <span class="role-option-icon">🧒</span>
+                  <div class="role-option-title">Estudiante</div>
+                  <div style="font-size: 0.73rem; color: #64748b;">Juego y actividades</div>
+                </div>
+                <div id="role-card-maestro" class="role-option-card" onclick="window.leoApp.selectRegRole('maestro')">
+                  <span class="role-option-icon">👩‍🏫</span>
+                  <div class="role-option-title">Maestro</div>
+                  <div style="font-size: 0.73rem; color: #64748b;">Seguimiento y aula</div>
                 </div>
                 <div id="role-card-admin" class="role-option-card" onclick="window.leoApp.selectRegRole('admin')">
                   <span class="role-option-icon">👑</span>
                   <div class="role-option-title">Administrador</div>
-                  <div style="font-size: 0.78rem; color: #64748b;">Control total del sistema</div>
+                  <div style="font-size: 0.73rem; color: #64748b;">Control total global</div>
                 </div>
               </div>
-              <input type="hidden" id="reg-role-value" value="user">
+              <input type="hidden" id="reg-role-value" value="estudiante">
             </div>
 
             <button type="submit" id="btn-register-submit" class="auth-btn-submit" style="background: linear-gradient(135deg, #ff9800, #f57c00);">
@@ -814,6 +828,27 @@
         </div>
       </div>
 
+      <!-- Asignación Pedagógica de Lecturas y Actividades de Aula -->
+      <div class="teacher-dashboard-box" style="border: 2px solid #e0f2fe; background: #f0f9ff;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <h3 style="font-size: 1.25rem; color: #0369a1;">📖 Asignación de Actividades y Lecturas al Aula</h3>
+          <span style="font-size: 0.82rem; font-weight: 800; background: #e0f2fe; color: #0288d1; padding: 4px 10px; border-radius: 999px;">
+            ⚡ Asignación en Tiempo Real
+          </span>
+        </div>
+        <p style="font-size: 0.88rem; color: #475569; margin-bottom: 14px;">
+          Selecciona una lectura peruana aprobada para proyectarla o enviarla directamente a los estudiantes de tu aula:
+        </p>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+          <select id="teacher-assign-reading-select" class="admin-select-ctrl" style="margin-bottom: 0; flex: 1; min-width: 260px;">
+            <!-- Opciones dinámicas -->
+          </select>
+          <button class="btn-primary" style="padding: 12px 24px; font-size: 0.95rem;" onclick="window.leoApp.teacherBroadcastReading()">
+            🚀 Asignar Lectura a los Alumnos
+          </button>
+        </div>
+      </div>
+
       <!-- Alertas y Recomendaciones de IA para el Docente -->
       <div class="teacher-dashboard-box">
         <h3 style="font-size: 1.3rem; margin-bottom: 12px;">💡 Recomendaciones Pedagógicas de Leo:</h3>
@@ -979,13 +1014,29 @@
           </div>
         </div>
 
-        <!-- 1. MÉTRICAS GLOBALES -->
-        <div class="admin-metrics-row">
+        <!-- 1. MÉTRICAS GLOBALES MULTI-ROL -->
+        <div class="admin-metrics-row" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));">
           <div class="admin-metric-card">
             <div class="admin-metric-icon-box" style="background: #e0f2fe; color: #0288d1;">👥</div>
             <div>
               <div id="admin-stat-total-users" class="admin-metric-value">--</div>
-              <div class="admin-metric-label">Usuarios en MongoDB Atlas</div>
+              <div class="admin-metric-label">Total Cuentas MongoDB</div>
+            </div>
+          </div>
+
+          <div class="admin-metric-card">
+            <div class="admin-metric-icon-box" style="background: #f0fdf4; color: #16a34a;">🧒</div>
+            <div>
+              <div id="admin-stat-students-count" class="admin-metric-value">--</div>
+              <div class="admin-metric-label">Estudiantes Registrados</div>
+            </div>
+          </div>
+
+          <div class="admin-metric-card">
+            <div class="admin-metric-icon-box" style="background: #fff7ed; color: #ea580c;">👩‍🏫</div>
+            <div>
+              <div id="admin-stat-teachers-count" class="admin-metric-value">--</div>
+              <div class="admin-metric-label">Maestros / Docentes</div>
             </div>
           </div>
 
@@ -993,7 +1044,7 @@
             <div class="admin-metric-icon-box" style="background: #dcfce7; color: #16a34a;">🟢</div>
             <div>
               <div id="admin-stat-connected-users" class="admin-metric-value">1</div>
-              <div class="admin-metric-label">En Línea Ahora Mismo</div>
+              <div class="admin-metric-label">En Línea (Socket.io)</div>
             </div>
           </div>
 
@@ -1001,15 +1052,7 @@
             <div class="admin-metric-icon-box" style="background: #fef3c7; color: #d97706;">📖</div>
             <div>
               <div id="admin-stat-readings-count" class="admin-metric-value">15</div>
-              <div class="admin-metric-label">Lecturas Verificadas del Perú</div>
-            </div>
-          </div>
-
-          <div class="admin-metric-card">
-            <div class="admin-metric-icon-box" style="background: #f3e8ff; color: #9333ea;">🏆</div>
-            <div>
-              <div id="admin-stat-comprehension-rate" class="admin-metric-value">3 Niveles</div>
-              <div class="admin-metric-label">Literal • Inferencial • Crítico</div>
+              <div class="admin-metric-label">Lecturas Verificadas</div>
             </div>
           </div>
         </div>
@@ -1058,30 +1101,35 @@
               </div>
             </div>
 
-            <!-- SECCIÓN B: DIRECTORIO DE USUARIOS REGISTRADOS EN MONGODB ATLAS -->
+            <!-- SECCIÓN B: DIRECTORIO DE USUARIOS REGISTRADOS EN MONGODB ATLAS Y ASIGNACIÓN DE ROLES -->
             <div class="admin-card-section">
               <div class="admin-section-header">
                 <div class="admin-section-title">
-                  <span>🍃</span> Directorio de Cuentas (MongoDB Atlas)
+                  <span>🍃</span> Gestión Global de Cuentas y Asignación de Roles
                 </div>
                 <button class="btn-outline" style="padding: 6px 12px; font-size: 0.82rem;" onclick="window.leoApp.loadMongoUsersList()">
                   🔄 Recargar Cuentas
                 </button>
               </div>
 
+              <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 12px;">
+                Como Administrador Principal, puedes reasignar roles de forma instantánea entre <strong>Estudiante</strong>, <strong>Maestro</strong> y <strong>Administrador</strong>.
+              </p>
+
               <div class="admin-table-wrap">
                 <table class="admin-live-table">
                   <thead>
                     <tr>
                       <th>Usuario</th>
-                      <th>Nombre / Apodo</th>
-                      <th>Rol</th>
-                      <th>Fecha de Registro</th>
+                      <th>Nombre</th>
+                      <th>Rol Actual</th>
+                      <th>Asignar Rol (Control Total)</th>
+                      <th>Registro</th>
                     </tr>
                   </thead>
                   <tbody id="admin-mongo-users-table-body">
                     <tr>
-                      <td colspan="4" style="text-align: center; color: #94a3b8; padding: 20px;">
+                      <td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">
                         Consultando MongoDB Atlas...
                       </td>
                     </tr>

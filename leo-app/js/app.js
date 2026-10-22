@@ -65,6 +65,26 @@ class LeoApp {
         }
       }
     });
+
+    // Notificación en tiempo real cuando un docente o administrador asigna una lectura al aula
+    socket.on("student:assigned-reading", (data) => {
+      if (!data) return;
+      const isStudent = !window.authService || (!window.authService.isAdmin() && !window.authService.isTeacher());
+      if (isStudent) {
+        window.audioService.playLevelUp();
+        const msg = `📚 ¡NUEVA LECTURA ASIGNADA!\n${data.assignedBy || 'Tu maestro'} ha asignado para el aula la lectura:\n"${data.readingTitle}"\n\n¿Deseas abrirla ahora mismo para empezar a leer?`;
+        if (confirm(msg) && data.readingId) {
+          this.openReading(data.readingId);
+        }
+      }
+    });
+
+    // Anuncio institucional o pedagógico a toda la plataforma
+    socket.on("system:announcement", (data) => {
+      if (!data) return;
+      window.audioService.playClick();
+      alert(`📢 ${data.title}\n\n${data.message}`);
+    });
   }
 
   checkInitialScreen() {
@@ -76,13 +96,19 @@ class LeoApp {
 
     const currentUser = window.authService.getCurrentUser();
 
-    // 2. Si el usuario es Administrador Principal ('admin')
-    if (currentUser && currentUser.role === "admin") {
+    // 2. Administrador Principal ('admin') -> Panel de Administrador Principal
+    if (window.authService.isAdmin()) {
       this.navigateTo("screen-admin-dashboard");
       return;
     }
 
-    // 3. Si el usuario es Estudiante ('user')
+    // 3. Maestro ('maestro') -> Panel Docente de Seguimiento
+    if (window.authService.isTeacher()) {
+      this.navigateTo("screen-teacher-dashboard");
+      return;
+    }
+
+    // 4. Estudiante ('estudiante' / 'user') -> Interfaz de juego
     const currentStudent = window.storageService.getCurrentStudent();
     if (currentStudent) {
       if (!currentStudent.diagnosticDone) {
@@ -100,17 +126,28 @@ class LeoApp {
   // =========================================================================
 
   navigateTo(screenId) {
-    // Control de seguridad por roles
-    if (screenId === "screen-admin-dashboard") {
-      if (!window.authService || !window.authService.isAdmin()) {
-        alert("🔒 Acceso Restringido: Se requiere rol de Administrador Principal.");
-        return this.navigateTo("screen-dashboard");
-      }
-    }
-
     if (screenId !== "screen-auth") {
       if (!window.authService || !window.authService.isAuthenticated()) {
         return this.navigateTo("screen-auth");
+      }
+    }
+
+    // Control de seguridad y permisos por rol
+    if (screenId === "screen-admin-dashboard") {
+      if (!window.authService || !window.authService.isAdmin()) {
+        alert("🔒 Acceso Restringido: Se requiere rol de Administrador Principal.");
+        if (window.authService && window.authService.isTeacher()) {
+          return this.navigateTo("screen-teacher-dashboard");
+        } else {
+          return this.navigateTo("screen-dashboard");
+        }
+      }
+    }
+
+    if (screenId.startsWith("screen-teacher-")) {
+      if (!window.authService || (!window.authService.isAdmin() && !window.authService.isTeacher())) {
+        alert("🔒 Acceso Restringido: Este panel pedagógico es exclusivo para Maestros y Administradores.");
+        return this.navigateTo("screen-dashboard");
       }
     }
 
@@ -219,56 +256,74 @@ class LeoApp {
   updateNavbarUser() {
     const isAuth = window.authService && window.authService.isAuthenticated();
     const currentUser = isAuth ? window.authService.getCurrentUser() : null;
-    const isAdmin = isAuth && currentUser && currentUser.role === "admin";
+    const isAdmin = window.authService && window.authService.isAdmin();
+    const isTeacher = window.authService && window.authService.isTeacher();
+    const isStudent = !isAdmin && !isTeacher;
 
     const userChip = document.getElementById("nav-user-chip");
     const userNameEl = document.getElementById("nav-user-name");
     const userIconEl = document.getElementById("nav-user-icon");
     const logoutBtn = document.getElementById("btn-nav-logout");
     const adminNavBtn = document.getElementById("btn-nav-admin");
+    const teacherNavBtn = document.getElementById("btn-nav-teacher");
+    const gameNavBtn = document.getElementById("btn-nav-game");
+    const profilesBtn = document.getElementById("btn-nav-profiles");
     const student = window.storageService.getCurrentStudent();
     const modeBtn = document.getElementById("btn-toggle-role");
     const pointsChip = document.getElementById("nav-points-chip");
     const streakChip = document.getElementById("nav-streak-chip");
     const levelChip = document.getElementById("nav-level-chip");
 
-    // Chip de usuario y botón salir
+    // Chip de usuario y botones de navegación según permisos de rol
     if (isAuth && currentUser) {
       if (userChip) {
         userChip.style.display = "inline-flex";
-        if (userIconEl) userIconEl.innerText = isAdmin ? "👑" : "👤";
-        if (userNameEl) userNameEl.innerText = `${currentUser.displayName || currentUser.username} (${isAdmin ? 'Admin' : 'Usuario'})`;
+        const icon = isAdmin ? "👑" : (isTeacher ? "👩‍🏫" : "🧒");
+        const roleLabel = isAdmin ? "Admin" : (isTeacher ? "Maestro" : "Estudiante");
+        if (userIconEl) userIconEl.innerText = icon;
+        if (userNameEl) userNameEl.innerText = `${currentUser.displayName || currentUser.username} (${roleLabel})`;
       }
       if (logoutBtn) logoutBtn.style.display = "inline-block";
       if (adminNavBtn) adminNavBtn.style.display = isAdmin ? "inline-block" : "none";
+      if (teacherNavBtn) teacherNavBtn.style.display = (isAdmin || isTeacher) ? "inline-block" : "none";
+      if (gameNavBtn) gameNavBtn.style.display = (isAdmin || isTeacher) ? "inline-block" : "none";
+      if (profilesBtn) profilesBtn.style.display = isStudent ? "inline-block" : "none";
     } else {
       if (userChip) userChip.style.display = "none";
       if (logoutBtn) logoutBtn.style.display = "none";
       if (adminNavBtn) adminNavBtn.style.display = "none";
+      if (teacherNavBtn) teacherNavBtn.style.display = "none";
+      if (gameNavBtn) gameNavBtn.style.display = "none";
     }
+
+    if (modeBtn) modeBtn.style.display = "none"; // Controlado mediante botones explícitos de rol
 
     // Si estamos en la pantalla de autenticación, ocultar chips de juego
     if (this.currentScreen === "screen-auth") {
       if (pointsChip) pointsChip.style.display = "none";
       if (streakChip) streakChip.style.display = "none";
       if (levelChip) levelChip.style.display = "none";
-      if (modeBtn) modeBtn.style.display = "none";
       return;
-    } else {
-      if (modeBtn) modeBtn.style.display = "inline-flex";
     }
 
-    if (isAdmin || this.userMode === "TEACHER") {
-      if (modeBtn) modeBtn.innerHTML = `<span>👨‍🎓 Modo Estudiante</span>`;
+    if (isAdmin) {
       if (pointsChip) pointsChip.style.display = "none";
       if (streakChip) streakChip.style.display = "none";
       if (levelChip) {
         levelChip.style.display = "inline-flex";
         levelChip.className = "stat-chip level-chip";
-        levelChip.innerHTML = isAdmin ? `👑 <span>Admin Principal</span>` : `👩‍🏫 <span>Panel Docente</span>`;
+        levelChip.innerHTML = `👑 <span>Admin Principal</span>`;
+      }
+    } else if (isTeacher) {
+      if (pointsChip) pointsChip.style.display = "none";
+      if (streakChip) streakChip.style.display = "none";
+      if (levelChip) {
+        levelChip.style.display = "inline-flex";
+        levelChip.className = "stat-chip level-chip";
+        levelChip.innerHTML = `👩‍🏫 <span>Panel Maestro</span>`;
       }
     } else {
-      if (modeBtn) modeBtn.innerHTML = `<span>👩‍🏫 Modo Docente</span>`;
+      // Estudiante: acceso completo y visible a gamificación
       if (pointsChip) {
         pointsChip.style.display = "inline-flex";
         pointsChip.innerHTML = `⭐ <span>${student ? student.points : 0}</span>`;
@@ -1757,6 +1812,18 @@ class LeoApp {
       tableBody.innerHTML = tHtml;
     }
 
+    // Poblar selector de asignación de lecturas del aula
+    const assignSelect = document.getElementById("teacher-assign-reading-select");
+    if (assignSelect) {
+      if (approvedReadings.length === 0) {
+        assignSelect.innerHTML = `<option value="">No hay lecturas disponibles para asignar</option>`;
+      } else {
+        assignSelect.innerHTML = approvedReadings.map(r => `
+          <option value="${r.id}">[${r.level}] ${r.title} (${r.genre})</option>
+        `).join("");
+      }
+    }
+
     // Alertas y Recomendaciones de IA
     const alertsContainer = document.getElementById("teacher-ai-recommendations-list");
     if (alertsContainer) {
@@ -1774,6 +1841,38 @@ class LeoApp {
         `;
       });
       alertsContainer.innerHTML = rHtml;
+    }
+  }
+
+  teacherBroadcastReading() {
+    window.audioService.playClick();
+    const selectEl = document.getElementById("teacher-assign-reading-select");
+    if (!selectEl) return;
+
+    const readingId = selectEl.value;
+    const reading = window.storageService.getReadingById(readingId);
+
+    if (!reading) {
+      alert("Por favor selecciona una lectura aprobada para asignar.");
+      return;
+    }
+
+    const currentUser = window.authService ? window.authService.getCurrentUser() : null;
+    const teacherName = currentUser ? (currentUser.displayName || currentUser.username) : "Tu Maestro";
+
+    if (socket && socket.connected) {
+      socket.emit("admin:broadcast-reading", {
+        readingId: reading.id,
+        readingTitle: reading.title,
+        level: reading.level,
+        assignedBy: `Docente ${teacherName}`
+      }, (res) => {
+        window.audioService.playSuccess();
+        alert(`🚀 ¡Lectura asignada al aula!\n"${reading.title}" fue enviada en tiempo real a las pantallas de tus estudiantes.`);
+      });
+    } else {
+      window.audioService.playSuccess();
+      alert(`🚀 ¡Lectura asignada al aula!\n"${reading.title}" asignada correctamente a la sesión activa.`);
     }
   }
 
@@ -2062,18 +2161,19 @@ class LeoApp {
   selectRegRole(role) {
     window.audioService.playClick();
     const roleVal = document.getElementById("reg-role-value");
-    const userCard = document.getElementById("role-card-user");
+    const estudianteCard = document.getElementById("role-card-estudiante");
+    const maestroCard = document.getElementById("role-card-maestro");
     const adminCard = document.getElementById("role-card-admin");
 
     if (roleVal) roleVal.value = role;
 
-    if (role === "admin") {
-      if (adminCard) adminCard.classList.add("selected");
-      if (userCard) userCard.classList.remove("selected");
-    } else {
-      if (userCard) userCard.classList.add("selected");
-      if (adminCard) adminCard.classList.remove("selected");
-    }
+    [estudianteCard, maestroCard, adminCard].forEach(card => {
+      if (card) card.classList.remove("selected");
+    });
+
+    if (role === "admin" && adminCard) adminCard.classList.add("selected");
+    else if ((role === "maestro" || role === "teacher") && maestroCard) maestroCard.classList.add("selected");
+    else if (estudianteCard) estudianteCard.classList.add("selected");
   }
 
   fillDemoCredentials(username, password) {
@@ -2124,8 +2224,11 @@ class LeoApp {
             submitBtn.disabled = false;
             submitBtn.innerText = "Ingresar a LEO 🚀";
           }
+          // Redirección estricta según rol
           if (result.user.role === "admin") {
             this.navigateTo("screen-admin-dashboard");
+          } else if (result.user.role === "maestro" || result.user.role === "teacher" || result.user.role === "docente") {
+            this.navigateTo("screen-teacher-dashboard");
           } else {
             this.navigateTo("screen-dashboard");
           }
@@ -2164,7 +2267,7 @@ class LeoApp {
     const displayName = nameInput ? nameInput.value.trim() : username;
     const password = passInput.value;
     const confirmPass = confirmInput.value;
-    const role = roleVal ? roleVal.value : "user";
+    const role = roleVal ? roleVal.value : "estudiante";
 
     if (password !== confirmPass) {
       this.showAuthStatus("Las contraseñas no coinciden. Por favor verifica.", true);
@@ -2192,8 +2295,11 @@ class LeoApp {
             submitBtn.disabled = false;
             submitBtn.innerText = "Crear mi Cuenta 🎉";
           }
+          // Redirección estricta según rol
           if (result.user.role === "admin") {
             this.navigateTo("screen-admin-dashboard");
+          } else if (result.user.role === "maestro" || result.user.role === "teacher") {
+            this.navigateTo("screen-teacher-dashboard");
           } else {
             this.navigateTo("screen-dashboard");
           }
@@ -2266,7 +2372,7 @@ class LeoApp {
 
     const stats = await window.authService.fetchAdminStats();
 
-    if (stats) {
+    if (stats && stats.stats) {
       if (dbStatusText) {
         dbStatusText.innerText = stats.dbStatus === "connected_atlas" ? "Conectado a Atlas 🍃" : "Modo Respaldo Local 🟡";
       }
@@ -2276,10 +2382,16 @@ class LeoApp {
       }
 
       const totalUsersEl = document.getElementById("admin-stat-total-users");
-      if (totalUsersEl) totalUsersEl.innerText = stats.stats.totalRegisteredUsers;
+      if (totalUsersEl) totalUsersEl.innerText = stats.stats.totalRegisteredUsers || 0;
+
+      const studentCountEl = document.getElementById("admin-stat-students-count");
+      if (studentCountEl) studentCountEl.innerText = stats.stats.studentCount || 0;
+
+      const teacherCountEl = document.getElementById("admin-stat-teachers-count");
+      if (teacherCountEl) teacherCountEl.innerText = stats.stats.teacherCount || 0;
 
       const connCountEl = document.getElementById("admin-stat-connected-users");
-      if (connCountEl) connCountEl.innerText = stats.stats.connectedUsersCount;
+      if (connCountEl) connCountEl.innerText = stats.stats.connectedUsersCount || 0;
 
       if (stats.stats.connectedUsers) {
         this.renderAdminLiveUsers(stats.stats.connectedUsers);
@@ -2316,9 +2428,12 @@ class LeoApp {
 
     tbody.innerHTML = usersList.map(u => {
       const isMe = (window.authService.getCurrentUser()?.username === u.username);
-      const roleBadge = u.role === "admin" 
+      const r = (u.role || '').toLowerCase();
+      const roleBadge = r === "admin" 
         ? `<span class="table-role-badge admin">👑 Admin</span>` 
-        : `<span class="table-role-badge user">👤 Estudiante</span>`;
+        : (r === "maestro" || r === "docente" || r === "teacher" 
+           ? `<span class="table-role-badge" style="background: #ffedd5; color: #c2410c;">👩‍🏫 Maestro</span>` 
+           : `<span class="table-role-badge user">🧒 Estudiante</span>`);
 
       const actions = isMe ? `<span style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">(Tu sesión)</span>` : `
         <div class="table-action-btns">
@@ -2361,16 +2476,28 @@ class LeoApp {
         const data = await res.json();
         if (data.users && data.users.length > 0) {
           tbody.innerHTML = data.users.map(u => {
-            const roleBadge = u.role === "admin"
+            const r = (u.role || '').toLowerCase();
+            const roleBadge = r === "admin"
               ? `<span class="table-role-badge admin">👑 Admin</span>`
-              : `<span class="table-role-badge user">👤 Usuario</span>`;
+              : (r === "maestro" || r === "docente" || r === "teacher"
+                 ? `<span class="table-role-badge" style="background: #ffedd5; color: #c2410c;">👩‍🏫 Maestro</span>`
+                 : `<span class="table-role-badge user">🧒 Estudiante</span>`);
             const dateStr = u.createdAt ? new Date(u.createdAt).toLocaleDateString("es-PE") : "Hoy";
+
+            const roleSelector = `
+              <select class="btn-table-action" style="font-weight: 800; padding: 4px 8px; border-radius: 8px;" onchange="window.leoApp.adminChangeUserRole('${u.username}', this.value)">
+                <option value="estudiante" ${r === 'estudiante' || r === 'user' ? 'selected' : ''}>🧒 Estudiante</option>
+                <option value="maestro" ${r === 'maestro' || r === 'docente' || r === 'teacher' ? 'selected' : ''}>👩‍🏫 Maestro</option>
+                <option value="admin" ${r === 'admin' ? 'selected' : ''}>👑 Administrador</option>
+              </select>
+            `;
 
             return `
               <tr>
                 <td><strong>@${u.username}</strong></td>
                 <td>${u.displayName || u.username}</td>
                 <td>${roleBadge}</td>
+                <td>${roleSelector}</td>
                 <td style="color: #64748b; font-size: 0.85rem;">${dateStr}</td>
               </tr>
             `;
@@ -2384,18 +2511,48 @@ class LeoApp {
 
     const defaultUsers = [
       { username: "admin", displayName: "Administrador Principal", role: "admin", createdAt: new Date() },
-      { username: "lucia", displayName: "Lucía Quispe", role: "user", createdAt: new Date() },
-      { username: "mateo", displayName: "Mateo Flores", role: "user", createdAt: new Date() }
+      { username: "maestro", displayName: "Maestro de Aula", role: "maestro", createdAt: new Date() },
+      { username: "mateo", displayName: "Mateo Flores", role: "estudiante", createdAt: new Date() },
+      { username: "lucia", displayName: "Lucía Quispe", role: "estudiante", createdAt: new Date() }
     ];
 
-    tbody.innerHTML = defaultUsers.map(u => `
-      <tr>
-        <td><strong>@${u.username}</strong></td>
-        <td>${u.displayName}</td>
-        <td>${u.role === 'admin' ? '<span class="table-role-badge admin">👑 Admin</span>' : '<span class="table-role-badge user">👤 Usuario</span>'}</td>
-        <td style="color: #64748b; font-size: 0.85rem;">Activo</td>
-      </tr>
-    `).join("");
+    tbody.innerHTML = defaultUsers.map(u => {
+      const r = u.role;
+      const roleBadge = r === 'admin' 
+        ? '<span class="table-role-badge admin">👑 Admin</span>' 
+        : (r === 'maestro' ? '<span class="table-role-badge" style="background: #ffedd5; color: #c2410c;">👩‍🏫 Maestro</span>' : '<span class="table-role-badge user">🧒 Estudiante</span>');
+
+      const roleSelector = `
+        <select class="btn-table-action" style="font-weight: 800; padding: 4px 8px; border-radius: 8px;" onchange="window.leoApp.adminChangeUserRole('${u.username}', this.value)">
+          <option value="estudiante" ${r === 'estudiante' ? 'selected' : ''}>🧒 Estudiante</option>
+          <option value="maestro" ${r === 'maestro' ? 'selected' : ''}>👩‍🏫 Maestro</option>
+          <option value="admin" ${r === 'admin' ? 'selected' : ''}>👑 Administrador</option>
+        </select>
+      `;
+
+      return `
+        <tr>
+          <td><strong>@${u.username}</strong></td>
+          <td>${u.displayName}</td>
+          <td>${roleBadge}</td>
+          <td>${roleSelector}</td>
+          <td style="color: #64748b; font-size: 0.85rem;">Activo</td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  async adminChangeUserRole(username, newRole) {
+    window.audioService.playClick();
+    if (confirm(`¿Confirmas reasignar el rol de @${username} a "${newRole.toUpperCase()}"?`)) {
+      const res = await window.authService.changeUserRole(username, newRole);
+      window.audioService.playSuccess();
+      alert(`✅ ${res?.message || `Rol de @${username} actualizado a ${newRole}.`}`);
+      await this.loadMongoUsersList();
+      await this.refreshAdminLiveUsers();
+    } else {
+      await this.loadMongoUsersList();
+    }
   }
 
   adminBroadcastSelectedReading() {

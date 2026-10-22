@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>LEO – Lectura, Escritura y Oralidad</title>
+  <link rel="icon" type="image/png" href="assets/leo-logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700;800;900&family=Nunito:wght@600;700;800;900&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+
+<body>
+
+  <!-- =========================================================================
+       BARRA DE NAVEGACIÓN SUPERIOR (NAVBAR)
+       ========================================================================= -->
+  <header class="app-navbar">
+    <div class="nav-brand brand-nav-link" title="Ir al Inicio de Leo">
+      <img src="assets/leo-logo.png" alt="Logo Oficial de Leo" class="brand-logo-img">
+      <div class="brand-text-container">
+        <span class="brand-title">LEO</span>
+        <span class="brand-subtitle">Lectura • Escritura • Oralidad 🇵🇪</span>
+      </div>
+    </div>
+
+    <div class="nav-stats">
+      <div id="nav-points-chip" class="stat-chip points" title="Tus puntos acumulados">
+        ⭐ <span>0</span>
+      </div>
+      <div id="nav-streak-chip" class="stat-chip streak" title="Días consecutivos leyendo">
+        🔥 <span>1 d</span>
+      </div>
+      <div id="nav-level-chip" class="stat-chip level-chip level-badge-inicio">
+        🟢 <span>INICIO</span>
+      </div>
+    </div>
+
+    <div class="nav-actions">
+      <button id="btn-toggle-sound" class="btn-icon" title="Sonido activado" aria-label="Control de sonido">
+        🔊
+      </button>
+      <button id="btn-nav-profiles" class="btn-icon" title="Cambiar estudiante"
+        onclick="window.leoApp.navigateTo('screen-profiles')">
+        👥
+      </button>
+      <button id="btn-toggle-role" class="btn-mode-toggle">
+        👩‍🏫 Modo Docente
+      </button>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       CONTENEDOR DE PANTALLAS PRINCIPALES
+       ========================================================================= -->
+  <main class="app-container">
+
+    <!-- PANTALLA 1: BIENVENIDA / SPLASH -->
+    <section id="screen-welcome" class="app-screen active">
+      <div class="welcome-hero">
+        <div class="welcome-logo-container">
+          <img src="assets/leo-logo.png" alt="Logo de Leo" class="welcome-logo-img">
+        </div>
+        <h1 class="welcome-title">¡Hola! Bienvenido a <span class="leo-orange">LEO</span></h1>
+        <p class="welcome-tagline">
+          Lectura, Escritura y Oralidad: una aventura educativa donde cada estudiante aprende a su propio ritmo. 🇵🇪
+        </p>
+
+        <div class="welcome-principles-strip">
+          <span class="principle-tag">📖 Lectura sin presiones</span>
+          <span class="principle-tag">✍️ Escritura divertida</span>
+          <span class="principle-tag">🎙️ Voz y comprensión</span>
+          <span class="principle-tag">🇵🇪 Historias del Perú</span>
+          <span class="principle-tag">🎮 Gamificación motivadora</span>
+        </div>
+
+        <div class="welcome-actions">
+          <button class="btn-primary" style="font-size: 1.25rem; padding: 16px 36px;"
+            onclick="window.leoApp.navigateTo('screen-profiles')">
+            ¡Comenzar mi aventura! 🚀
+          </button>
+          <button class="btn-secondary" style="font-size: 1.15rem; padding: 16px 30px;"
+            onclick="window.leoApp.toggleRole()">
+            Acceso Docente 👩‍🏫
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANTALLA 2: SELECCIÓN DE PERFIL DE ESTUDIANTE -->
+    <section id="screen-profiles" class="app-screen">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <h2 style="font-size: 2rem;">¿Quién está jugando hoy? 🦁</h2>
+        <p style="color: #64748b; font-size: 1.05rem;">Elige tu perfil para continuar tu aventura o crea uno nuevo.</p>
+      </div>
+      <div id="profiles-grid-container" class="profiles-grid">
+        <!-- Renderizado dinámico desde app.js -->
+      </div>
+    </section>
+
+    <!-- PANTALLA 3: CREACIÓN DE NUEVO ESTUDIANTE -->
+    <section id="screen-create-student" class="app-screen">
+      <div class="diagnostic-box" style="max-width: 600px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <div style="font-size: 3rem; margin-bottom: 8px;">🎒</div>
+          <h2 style="font-size: 1.8rem;">Crear Perfil de Estudiante</h2>
+          <p style="color: #64748b; font-size: 0.95rem; margin-top: 6px;">
+            <strong>Nota pedagógica:</strong> El grado escolar no determina el nivel de lectura. Al registrarte
+            realizarás una prueba diagnóstica para conocer tu punto de partida.
+          </p>
+        </div>
+
+        <form id="form-create-student" onsubmit="window.leoApp.handleCreateStudentSubmit(event)">
+          <div style="margin-bottom: 20px;">
+            <label style="font-weight: 800; display: block; margin-bottom: 8px;">Nombre del estudiante:</label>
+            <input type="text" id="new-student-name" required placeholder="Ej. Camila Santos" class="written-textarea"
+              style="min-height: 48px;">
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+            <div>
+              <label style="font-weight: 800; display: block; margin-bottom: 8px;">Edad:</label>
+              <select id="new-student-age" class="written-textarea" style="min-height: 48px;">
+                <option value="6">6 años</option>
+                <option value="7" selected>7 años</option>
+                <option value="8">8 años</option>
+                <option value="9">9 años</option>
+                <option value="10">10 años</option>
+                <option value="11">11 años</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-weight: 800; display: block; margin-bottom: 8px;">Grado escolar:</label>
+              <select id="new-student-grade" class="written-textarea" style="min-height: 48px;">
+                <option value="1° Grado Primaria">1° Grado Primaria</option>
+                <option value="2° Grado Primaria" selected>2° Grado Primaria</option>
+                <option value="3° Grado Primaria">3° Grado Primaria</option>
+                <option value="4° Grado Primaria">4° Grado Primaria</option>
+                <option value="5° Grado Primaria">5° Grado Primaria</option>
+                <option value="6° Grado Primaria">6° Grado Primaria</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 12px; justify-content: flex-end;">
+            <button type="button" class="btn-outline"
+              onclick="window.leoApp.navigateTo('screen-profiles')">Cancelar</button>
+            <button type="submit" class="btn-primary">¡Comenzar Diagnóstico! 🎯</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- PANTALLA 4: EVALUACIÓN DIAGNÓSTICA -->
+    <section id="screen-diagnostic" class="app-screen">
+      <div class="diagnostic-box">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+          <span id="diag-category-title"
+            style="font-weight: 800; color: #0288d1; text-transform: uppercase; font-size: 0.9rem;">
+            Reconocimiento de Sílabas
+          </span>
+          <span id="diag-step-counter" style="font-weight: 800; color: #64748b; font-size: 0.9rem;">
+            Pregunta 1 de 10
+          </span>
+        </div>
+
+        <div class="diag-progress-bar-wrap">
+          <div id="diag-progress-fill" class="diag-progress-fill"></div>
+        </div>
+
+        <p id="diag-instruction-text"
+          style="color: #475569; font-weight: 600; margin-bottom: 16px; font-size: 1.05rem;">
+          Escucha o lee con atención y elige la opción correcta.
+        </p>
+
+        <div id="diag-prompt-content" class="diag-prompt-box">
+          <!-- Contenido dinámico del ítem diagnóstico -->
+        </div>
+
+        <div id="diag-options-container" class="diag-options-grid">
+          <!-- Botones de opciones -->
+        </div>
+      </div>
+    </section>
+
+    <!-- PANTALLA 5: RESULTADO DIAGNÓSTICO -->
+    <section id="screen-diagnostic-result" class="app-screen">
+      <div class="results-summary-card">
+        <div id="diag-res-badge-icon" style="font-size: 4.5rem; margin-bottom: 8px;">🟢</div>
+        <h2 id="diag-res-level-title" style="font-size: 2.2rem; margin-bottom: 8px;">Nivel Asignado: Inicio</h2>
+
+        <p id="diag-res-explanation"
+          style="font-size: 1.2rem; color: #334155; line-height: 1.6; margin-bottom: 24px; max-width: 620px; margin-left: auto; margin-right: auto;">
+          Comenzaremos en 🟢 Inicio. Aquí podrás practicar paso a paso y avanzar a tu propio ritmo.
+        </p>
+
+        <div style="background: #f1f5f9; border-radius: 16px; padding: 20px; margin-bottom: 28px; text-align: left;">
+          <h4 style="font-weight: 800; color: #0f172a; margin-bottom: 12px;">📊 Resumen de tu evaluación inicial:</h4>
+          <div style="font-size: 1.1rem; margin-bottom: 12px; font-weight: 800; color: #0288d1;">
+            Puntaje general: <span id="diag-res-score-pct">0%</span>
+          </div>
+          <div id="diag-res-breakdown">
+            <!-- Desglose por etapas -->
+          </div>
+        </div>
+
+        <button class="btn-primary" style="font-size: 1.25rem; padding: 16px 36px;"
+          onclick="window.leoApp.navigateTo('screen-dashboard')">
+          ¡Entrar a mi Aventura con Leo! 🚀
+        </button>
+      </div>
+    </section>
+
+    <!-- PANTALLA 6: DASHBOARD PRINCIPAL DEL ESTUDIANTE -->
+    <section id="screen-dashboard" class="app-screen">
+      <!-- Banner Hero -->
+      <div class="student-hero-banner">
+        <div class="student-hero-info">
+          <h2 id="dash-student-greeting">¡Hola, Lucía! 👋</h2>
+          <p id="dash-leo-recommendation">
+            Leo te recomienda: Practicar en la Etapa 2 con palabras sencillas y sonidos divertidos.
+          </p>
+        </div>
+
+        <div class="student-level-card">
+          <div class="student-level-title">Nivel de Lectura Actual</div>
+          <div id="dash-level-val" class="student-level-value">🟢 Nivel INICIO</div>
+          <div class="diag-progress-bar-wrap"
+            style="height: 10px; margin: 8px 0; background: rgba(255,255,255,0.4); border: none;">
+            <div id="dash-progress-fill" class="diag-progress-fill" style="background: #ffffff; width: 45%;"></div>
+          </div>
+          <div id="dash-progress-text" style="font-size: 0.82rem; font-weight: 800;">Progreso: 45%</div>
+        </div>
+      </div>
+
+      <!-- Tarjetas de Acción de Aventura -->
+      <div class="dashboard-actions-grid">
+        <div class="dash-card card-reading" onclick="window.leoApp.navigateTo('screen-library')">
+          <div class="dash-card-icon">📖</div>
+          <div>
+            <h3 class="dash-card-title">Biblioteca de Lecturas</h3>
+            <p class="dash-card-desc">Explora cuentos, fábulas y biografías de héroes del Perú adaptadas a tu nivel.</p>
+          </div>
+          <button class="btn-primary" style="width: 100%;">Explorar Lecturas 📚</button>
+        </div>
+
+        <div class="dash-card card-roulette" onclick="window.leoApp.navigateTo('screen-roulette')">
+          <div class="dash-card-icon">🎡</div>
+          <div>
+            <h3 class="dash-card-title">Ruleta: ¿Qué leeremos hoy?</h3>
+            <p class="dash-card-desc">Gira la ruleta mágica y descubre una aventura aleatoria según tus temas favoritos.
+            </p>
+          </div>
+          <button class="btn-secondary" style="width: 100%;">Girar la Ruleta 🎯</button>
+        </div>
+
+        <div class="dash-card card-writing" onclick="window.leoApp.navigateTo('screen-writing')">
+          <div class="dash-card-icon">✍️</div>
+          <div>
+            <h3 class="dash-card-title">Taller de Escritura</h3>
+            <p class="dash-card-desc">Forma palabras, ordena oraciones y escribe tus propias reflexiones creativas.</p>
+          </div>
+          <button class="btn-outline" style="width: 100%; border-color: #c084fc; color: #7e22ce;">Practicar Escritura
+            ✏️</button>
+        </div>
+
+        <div class="dash-card card-orality" onclick="window.leoApp.navigateTo('screen-orality')">
+          <div class="dash-card-icon">🎙️</div>
+          <div>
+            <h3 class="dash-card-title">Cuéntale a Leo</h3>
+            <p class="dash-card-desc">Usa el micrófono y cuéntale a Leo en voz alta lo que entendiste de tu lectura.</p>
+          </div>
+          <button class="btn-outline" style="width: 100%; border-color: #34d399; color: #065f46;">Hablar con Leo
+            🗣️</button>
+        </div>
+      </div>
+
+      <!-- Accesos Rápidos de Gamificación -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
+        <div class="dash-card" onclick="window.leoApp.navigateTo('screen-early-literacy')"
+          style="border-color: #a7f3d0; background: #f0fdf4;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 2.2rem;">🚂</span>
+            <div>
+              <h4 style="font-weight: 800; font-size: 1.1rem;">Etapas de Nivel Inicio</h4>
+              <p style="font-size: 0.85rem; color: #64748b;">Sílabas • Palabras • Frases</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="dash-card" onclick="window.leoApp.navigateTo('screen-avatar')"
+          style="border-color: #fde68a; background: #fffbeb;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 2.2rem;">👤</span>
+            <div>
+              <h4 style="font-weight: 800; font-size: 1.1rem;">Mi Personaje y Tienda</h4>
+              <p style="font-size: 0.85rem; color: #64748b;">Desbloquea chullos y ponchos</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="dash-card" onclick="window.leoApp.navigateTo('screen-challenges')"
+          style="border-color: #fed7aa; background: #fff7ed;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 2.2rem;">🏆</span>
+            <div>
+              <h4 style="font-weight: 800; font-size: 1.1rem;">Retos y Logros</h4>
+              <p style="font-size: 0.85rem; color: #64748b;">Gana medallas y mantén tu racha</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="dash-card" onclick="window.leoApp.navigateTo('screen-profile')"
+          style="border-color: #bae6fd; background: #f0f9ff;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 2.2rem;">📈</span>
+            <div>
+              <h4 style="font-weight: 800; font-size: 1.1rem;">Mi Progreso Detallado</h4>
+              <p style="font-size: 0.85rem; color: #64748b;">Métricas literal, inferencial y crítica</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANTALLA 7: BIBLIOTECA DE LECTURAS -->
+    <section id="screen-library" class="app-screen">
+      <div
+        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <h2 style="font-size: 1.8rem;">Biblioteca de Aventuras 📚</h2>
+          <p style="color: #64748b;">Todas las lecturas están aprobadas por docentes y adaptadas a tu nivel.</p>
+        </div>
+        <button class="btn-outline" onclick="window.leoApp.navigateTo('screen-dashboard')">⬅ Volver al Inicio</button>
+      </div>
+
+      <!-- Filtros de categoría -->
+      <div id="library-category-filters" class="library-filters">
+        <!-- Generado dinámicamente -->
+      </div>
+
+      <!-- Cuadrícula de libros -->
+      <div id="library-books-grid" class="readings-grid">
+        <!-- Generado dinámicamente -->
+      </div>
+    </section>
+
+    <!-- PANTALLA 8: RULETA INTERACTIVA -->
+    <section id="screen-roulette" class="app-screen">
+      <div class="roulette-container">
+        <h2 style="font-size: 2rem; margin-bottom: 6px;">🎡 ¿Qué leeremos hoy?</h2>
+        <p style="color: #64748b; font-size: 1.1rem;">Presiona girar para que la ruleta elija una historia sorprendente
+          para tu nivel.</p>
+
+        <div class="wheel-wrapper">
+          <div class="wheel-pointer"></div>
+          <canvas id="roulette-wheel-canvas" class="wheel-canvas" width="320" height="320"></canvas>
+          <div class="wheel-center-logo">🦁</div>
+        </div>
+
+        <div style="margin-top: 16px;">
+          <button id="btn-spin-wheel" class="btn-secondary" style="font-size: 1.3rem; padding: 16px 42px;"
+            onclick="window.leoApp.spinWheel()">
+            ¡GIRAR LA RULETA! 🎯
+          </button>
+        </div>
+
+        <div id="roulette-result-box" style="display: none;">
+          <!-- Resultado dinámico de ruleta -->
+        </div>
+
+        <div style="margin-top: 24px;">
+          <button class="btn-outline" onclick="window.leoApp.navigateTo('screen-dashboard')">⬅ Volver al Inicio</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANTALLA 9: MODO LECTURA LIMPIO -->
+    <section id="screen-reader" class="app-screen">
+      <div class="reader-container">
+        <div class="reader-toolbar">
+          <button class="btn-outline" onclick="window.leoApp.navigateTo('screen-library')">⬅ Volver a
+            Biblioteca</button>
+          <span id="reader-genre-tag"
+            style="font-weight: 800; color: #0288d1; text-transform: uppercase; font-size: 0.9rem;">
+            Biografía • 5 min
+          </span>
+          <button id="btn-reader-listen" class="btn-primary" style="padding: 10px 20px; font-size: 0.95rem;">
+            🔊 Escuchar lectura en voz alta
+          </button>
+        </div>
+
+        <div class="reader-content-box">
+          <div id="reader-hero-icon" class="reader-hero-icon">⚓</div>
+          <h1 id="reader-title" class="reader-title">Título de la lectura</h1>
+
+          <div id="reader-paragraphs-container">
+            <!-- Párrafos renderizados dinámicamente -->
+          </div>
+
+          <div style="text-align: center; margin-top: 40px; padding-top: 24px; border-top: 2px dashed #e2e8f0;">
+            <p style="font-weight: 800; font-size: 1.2rem; color: #0f172a; margin-bottom: 16px;">
+              ¡Muy bien! Ahora vamos a comprobar cuánto comprendiste. 🦁
+            </p>
+            <button class="btn-success" style="font-size: 1.25rem; padding: 16px 36px;"
+              onclick="window.leoApp.startComprehensionQuiz()">
+              ¡Ir a las preguntas de comprensión! ➡️
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANTALLA 10: ACTIVIDADES DE COMPRENSIÓN (15 PREGUNTAS + COMODÍN) -->
+    <section id="screen-comprehension" class="app-screen">
+      <div class="quiz-container">
+        <div class="quiz-header-status">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span id="quiz-tier-badge" class="quiz-tier-badge tier-literal">Literal: 1/5</span>
+            <span id="quiz-step-counter" style="font-weight: 800; color: #64748b; font-size: 0.95rem;">Pregunta 1 de
+              15</span>
+          </div>
+          <button id="btn-use-comodin" class="btn-comodin">
+            💡 Usar Comodín (1 disponible)
+          </button>
+        </div>
+
+        <div class="diag-progress-bar-wrap" style="height: 12px; margin-bottom: 20px;">
+          <div id="quiz-progress-fill" class="diag-progress-fill" style="width: 10%;"></div>
+        </div>
+
+        <!-- Pista de Comodín -->
+        <div id="comodin-clue-box" class="comodin-clue-box"></div>
+
+        <!-- Enunciado de la pregunta -->
+        <h3 id="quiz-question-prompt" class="question-prompt">
+          ¿En qué lugar ocurrieron los hechos?
+        </h3>
+
+        <!-- Opciones interactivas o Cuadro de Respuesta Abierta -->
+        <div id="quiz-interactive-content">
+          <!-- Renderizado dinámico -->
+        </div>
+
+        <!-- Feedback Pedagógico Inmediato -->
+        <div id="quiz-feedback-box" class="quiz-feedback-box">
+          <!-- Explicación pedagógica -->
+        </div>
+      </div>
+    </section>
+
+    <!-- PANTALLA 12: RESULTADO DE LA ACTIVIDAD -->
+    <section id="screen-activity-result" class="app-screen">
+      <div class="results-summary-card">
+        <div style="font-size: 4rem; margin-bottom: 8px;">🎉</div>
+        <h2 style="font-size: 2.2rem; margin-bottom: 6px;">¡Lectura Completada!</h2>
+        <p style="color: #64748b; font-size: 1.1rem; margin-bottom: 24px;">¡Excelente esfuerzo! Cada día comprendes
+          mejor lo que lees.</p>
+
+        <div class="results-metrics-grid">
+          <div class="result-metric-box">
+            <div id="res-overall-pct" class="metric-val">85%</div>
+            <div class="metric-lbl">Comprensión General</div>
+          </div>
+          <div class="result-metric-box">
+            <div id="res-lit-pct" class="metric-val" style="color: #0369a1;">100%</div>
+            <div class="metric-lbl">Nivel Literal (5/5)</div>
+          </div>
+          <div class="result-metric-box">
+            <div id="res-inf-pct" class="metric-val" style="color: #b45309;">80%</div>
+            <div class="metric-lbl">Nivel Inferencial (4/5)</div>
+          </div>
+        </div>
+
+        <div
+          style="background: #f8fafc; border-radius: 16px; padding: 18px; border: 2px solid #e2e8f0; margin-bottom: 28px; display: flex; justify-content: space-around; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <span style="font-size: 0.9rem; color: #64748b; font-weight: 700;">Nivel Crítico:</span>
+            <div id="res-crit-pct" style="font-size: 1.4rem; font-weight: 900; color: #7e22ce;">80%</div>
+          </div>
+          <div>
+            <span style="font-size: 0.9rem; color: #64748b; font-weight: 700;">Puntos Ganados:</span>
+            <div id="res-points-earned" style="font-size: 1.4rem; font-weight: 900; color: #ea580c;">+55 ⭐</div>
+          </div>
+          <div id="res-comodin-status" style="font-weight: 800; color: #166534;">
+            ⭐ ¡Sin comodín utilizado! (+15 pts)
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: center; gap: 16px; flex-wrap: wrap;">
+          <button class="btn-primary" onclick="window.leoApp.navigateTo('screen-avatar')">
+            Ver Recompensas en la Tienda 🎁
+          </button>
+          <button class="btn-outline" onclick="window.leoApp.navigateTo('screen-dashboard')">
+            Volver al Inicio 🏠
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANTALLA: ETAPAS DE INICIO (4 ETAPAS) -->
+    <section id="screen-early-literacy" class="app-screen">
+      <div
+        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <h2 style="font-size: 1.8rem;">🟢 Etapas de Nivel Inicio</h2>
+          <p style="color: #64748b;">Aprende paso a paso desde sílabas hasta textos breves.</p>
+        </div>
+        <button class="btn-outline" onclick="window.leoApp.navigateTo('screen-dashboard')">⬅ Volver al Inicio</button>
+      </div>
+
+      <div id="early-stages-list">
+        <!-- Renderizado dinámico -->
+      </div>
+    </section>
+
+    <!-- PANTALLA: RINCÓN DE ORALIDAD ("Cuéntale a Leo") -->
+    <section id="screen-orality" class="app-screen">
+      <div class="diagnostic-box" style="text-align: center;">
+        <div style="font-size: 4rem; margin-bottom: 12px;">🎙️</div>
+        <h2 style="font-size: 1.8rem; margin-bottom: 8px;">Cuéntale a Leo lo que entendiste</h2>
+        <p style="color: #64748b; font-size: 1.05rem; max-width: 600px; margin: 0 auto 24px auto;">
+          Usa tu propia voz para compartir lo que más te gustó de tu lectura. Leo te escuchará con mucha atención.
+        </p>
+
+        <div id="orality-transcript-box"
+          style="min-height: 100px; background: #f8fafc; border: 3px dashed #cbd5e1; border-radius: 16px; padding: 20px; font-size: 1.2rem; color: #334155; display: flex; align-items: center; justify-content: center; margin-bottom: 24px;">
+          Presiona el botón del micrófono y habla claro.
+        </div>
+
+        <button id="btn-toggle-mic" class="btn-primary" style="font-size: 1.25rem; padding: 16px 36px;"
+          onclick="window.leoApp.toggleOralRecording()">
+          🎙️ Comenzar a hablar
+        </button>
+
+        <div id="orality-leo-response"></div>
+
+        <div style="margin-top: 24px;">
+          <button class="btn-outline" onclick="window.leoApp.navigateTo('screen-dashboard')">⬅ Volver al Inicio</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANTALLA: TALLER DE ESCRITURA -->
+    <section id="screen-writing" class="app-screen">
+      <div
+        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <h2 style="font-size: 1.8rem;">✍️ Taller de Escritura y Palabras</h2>
+          <p style="color: #64748b;">Practica formando frases y escribiendo oraciones sobre el Perú.</p>
+        </div>
+        <button class="btn-outline" onclick="window.leoApp.navigateTo('screen-dashboard')">⬅ Volver al Inicio</button>
+      </div>
+
+      <div id="writing-workshop-container">
+        <!-- Renderizado dinámico -->
+      </div>
+    </section>
+
+    <!-- PANTALLA 14 Y 15: PERSONAJE / AVATAR Y TIENDA -->
+    <section id="screen-avatar" class="app-screen">
+      <div
+        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <h2 style="font-size: 1.8rem;">👤 Mi Personaje y Tienda de Recompensas</h2>
+          <p style="color: #64748b;">Usa tus estrellas ⭐ para desbloquear chullos, ponchos y accesorios típicos.</p>
+        </div>
+        <button class="btn-outline" onclick="window.leoApp.navigateTo('screen-dashboard')">⬅ Volver al Inicio</button>
+      </div>
+
+      <div class="avatar-studio-layout">
+        <!-- Preview del Avatar -->
+        <div class="avatar-preview-box">
+          <div id="avatar-stage-display" class="avatar-stage">
+            <div id="av-layer-head" class="avatar-layer" style="margin-bottom: -15px;">🧢</div>
+            <div id="av-layer-face" class="avatar-layer" style="font-size: 4.5rem;">🦁</div>
+            <div id="av-layer-outfit" class="avatar-layer" style="margin-top: -15px;">👕</div>
+            <div id="av-layer-acc" style="position: absolute; bottom: 20px; right: 25px; font-size: 2rem;"></div>
+          </div>
+          <h3 style="font-size: 1.2rem; font-weight: 800;">Tu Personaje LEO</h3>
+          <p style="color: #64748b; font-size: 0.85rem; margin-top: 4px;">Listo para nuevas aventuras de lectura</p>
+        </div>
+
+        <!-- Tienda de Artículos -->
+        <div>
+          <div id="avatar-shop-tabs" class="shop-tabs"></div>
+          <div id="avatar-items-grid" class="shop-items-grid"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANTALLA 16: RETOS Y LOGROS -->
+    <section id="screen-challenges" class="app-screen">
+      <div
+        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <h2 style="font-size: 1.8rem;">🎯 Retos del Día y Logros 🏆</h2>
+          <p style="color: #64748b;">Supera desafíos diarios y colecciona medallas de lectura.</p>
+        </div>
+        <button class="btn-outline" onclick="window.leoApp.navigateTo('screen-dashboard')">⬅ Volver al Inicio</button>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+        <div>
+          <h3 style="font-size: 1.3rem; margin-bottom: 12px;">🎯 Retos Diarios Activos</h3>
+          <div id="challenges-list-container"></div>
+        </div>
+        <div>
+          <h3 style="font-size: 1.3rem; margin-bottom: 12px;">🏅 Colección de Medallas</h3>
+          <div id="achievements-grid-container"
+            style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANTALLA 13: PERFIL DEL ESTUDIANTE -->
+    <section id="screen-profile" class="app-screen">
+      <div
+        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <h2 style="font-size: 1.8rem;">📈 Mi Progreso y Estadísticas</h2>
+          <p style="color: #64748b;">Descubre cómo vas evolucionando en lectura y comprensión.</p>
+        </div>
+        <button class="btn-outline" onclick="window.leoApp.navigateTo('screen-dashboard')">⬅ Volver al Inicio</button>
+      </div>
+
+      <div class="diagnostic-box" style="max-width: 780px;">
+        <div style="display: flex; align-items: center; gap: 18px; margin-bottom: 24px;">
+          <div
+            style="width: 72px; height: 72px; border-radius: 50%; background: #e0f2fe; display: flex; align-items: center; justify-content: center; font-size: 2.8rem;">
+            🦁</div>
+          <div>
+            <h3 id="prof-student-name" style="font-size: 1.4rem;">Lucía Quispe</h3>
+            <p id="prof-student-grade" style="color: #64748b; font-weight: 700;">2° Grado Primaria • 7 años</p>
+            <span id="prof-student-level" class="stat-chip level-chip level-badge-inicio" style="margin-top: 6px;">Nivel
+              INICIO</span>
+          </div>
+        </div>
+
+        <h4 style="font-weight: 800; margin-bottom: 12px;">Desempeño por Niveles de Comprensión:</h4>
+        <div id="prof-stats-breakdown" class="results-metrics-grid" style="margin-top: 0;"></div>
+      </div>
+    </section>
+
+    <!-- =========================================================================
+         MÓDULO DOCENTE: PANTALLAS 17, 18, 19 Y 20
+         ========================================================================= -->
+
+    <!-- PANTALLA 17: PANEL DEL DOCENTE -->
+    <section id="screen-teacher-dashboard" class="app-screen">
+      <div
+        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <h2 style="font-size: 1.9rem;">👩‍🏫 Panel Pedagógico Docente</h2>
+          <p style="color: #64748b;">I.E. República del Perú - N° 1082 • 2° Grado "A"</p>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn-primary" onclick="window.leoApp.navigateTo('screen-teacher-library')">
+            📚 Repositorio de Lecturas
+          </button>
+          <button class="btn-secondary" onclick="window.leoApp.navigateTo('screen-teacher-ai-generator')">
+            🤖 Generar Lectura con IA
+          </button>
+        </div>
+      </div>
+
+      <!-- Métricas del Aula -->
+      <div class="teacher-metrics-row">
+        <div class="t-metric-card">
+          <div style="font-size: 0.85rem; font-weight: 800; color: #64748b; text-transform: uppercase;">Total
+            Estudiantes</div>
+          <div id="t-metric-total-students" style="font-size: 2rem; font-weight: 900; color: #0288d1;">3</div>
+          <div style="font-size: 0.8rem; color: #64748b; margin-top: 4px;">En seguimiento continuo</div>
+        </div>
+
+        <div class="t-metric-card success-border">
+          <div style="font-size: 0.85rem; font-weight: 800; color: #64748b; text-transform: uppercase;">Comprensión
+            Promedio</div>
+          <div id="t-metric-avg-comp" style="font-size: 2rem; font-weight: 900; color: #10b981;">76%</div>
+          <div style="font-size: 0.8rem; color: #166534; margin-top: 4px;">Rendimiento global adecuado</div>
+        </div>
+
+        <div class="t-metric-card warning-border">
+          <div style="font-size: 0.85rem; font-weight: 800; color: #64748b; text-transform: uppercase;">Lecturas IA
+            Pendientes</div>
+          <div id="t-metric-pending-ia" style="font-size: 2rem; font-weight: 900; color: #f59e0b;">1</div>
+          <div style="font-size: 0.8rem; color: #b45309; margin-top: 4px;">Requieren aprobación docente</div>
+        </div>
+      </div>
+
+      <!-- Alertas y Recomendaciones de IA para el Docente -->
+      <div class="teacher-dashboard-box">
+        <h3 style="font-size: 1.3rem; margin-bottom: 12px;">💡 Recomendaciones Pedagógicas de Leo:</h3>
+        <div id="teacher-ai-recommendations-list"></div>
+      </div>
+
+      <!-- Gestión de Estudiantes -->
+      <div class="teacher-dashboard-box">
+        <h3 style="font-size: 1.3rem; margin-bottom: 12px;">📋 Seguimiento Individual del Estudiante:</h3>
+        <div style="overflow-x: auto;">
+          <table class="students-table">
+            <thead>
+              <tr>
+                <th>Estudiante</th>
+                <th>Nivel Asignado</th>
+                <th>Lecturas</th>
+                <th>Comprensión</th>
+                <th>Estado de Refuerzo</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="teacher-students-table-body">
+              <!-- Renderizado dinámico -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANTALLA 18: BIBLIOTECA DOCENTE -->
+    <section id="screen-teacher-library" class="app-screen">
+      <div
+        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <h2 style="font-size: 1.8rem;">📚 Biblioteca y Repositorio Docente</h2>
+          <p style="color: #64748b;">Control de calidad de contenidos. Ninguna lectura IA se publica sin tu aprobación.
+          </p>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn-outline" onclick="window.leoApp.navigateTo('screen-teacher-dashboard')">⬅ Volver al
+            Panel</button>
+          <button class="btn-secondary" onclick="window.leoApp.navigateTo('screen-teacher-ai-generator')">+ Nueva
+            Lectura IA</button>
+        </div>
+      </div>
+
+      <!-- Filtros de Estado -->
+      <div class="library-filters">
+        <button class="filter-chip active" onclick="window.leoApp.renderTeacherLibrary('all')">Todas</button>
+        <button class="filter-chip" onclick="window.leoApp.renderTeacherLibrary('PENDIENTE_REVISION')">🟡 Pendientes de
+          Revisión</button>
+        <button class="filter-chip" onclick="window.leoApp.renderTeacherLibrary('APROBADA')">🟢 Aprobadas
+          (Activas)</button>
+        <button class="filter-chip" onclick="window.leoApp.renderTeacherLibrary('RECHAZADA')">🔴 Rechazadas</button>
+      </div>
+
+      <div id="teacher-readings-list">
+        <!-- Renderizado dinámico -->
+      </div>
+    </section>
+
+    <!-- PANTALLA 19: GENERADOR DE LECTURAS MEDIANTE IA -->
+    <section id="screen-teacher-ai-generator" class="app-screen">
+      <div class="diagnostic-box" style="max-width: 780px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <h2 style="font-size: 1.8rem;">🤖 Generación de Lecturas con IA</h2>
+          <button class="btn-outline" onclick="window.leoApp.navigateTo('screen-teacher-dashboard')">⬅ Volver</button>
+        </div>
+
+        <p style="color: #64748b; margin-bottom: 24px;">
+          La IA generará automáticamente el texto pedagógico con <strong>5 preguntas literales + 5 inferenciales + 5
+            críticas</strong>, pista de comodín y rigor histórico sobre el Perú. El contenido quedará inicialmente en
+          <strong>PENDIENTE DE REVISIÓN</strong>.
+        </p>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+          <div>
+            <label style="font-weight: 800; display: block; margin-bottom: 6px;">Nivel de Lectura:</label>
+            <select id="ai-gen-level" class="written-textarea" style="min-height: 48px;">
+              <option value="INICIO">🟢 Nivel Inicio (Textos muy breves / sílabas)</option>
+              <option value="DESARROLLO" selected>🟡 Nivel Desarrollo (Cuentos / fábulas)</option>
+              <option value="AVANZADO">🔴 Nivel Avanzado (Máximo 3 párrafos)</option>
+            </select>
+          </div>
+
+          <div>
+            <label style="font-weight: 800; display: block; margin-bottom: 6px;">Categoría / Tema:</label>
+            <select id="ai-gen-category" class="written-textarea" style="min-height: 48px;">
+              <option value="heroes" selected>🇵🇪 Héroes y Personajes Ilustres del Perú</option>
+              <option value="animales">🐾 Animales y Biodiversidad Peruana</option>
+              <option value="cultura">🌎 Costumbres y Patrimonio Cultural</option>
+              <option value="ciencia">🔬 Ciencia y Naturaleza</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+          <div>
+            <label style="font-weight: 800; display: block; margin-bottom: 6px;">Género Narrativo:</label>
+            <select id="ai-gen-genre" class="written-textarea" style="min-height: 48px;">
+              <option value="Biografía histórica" selected>Biografía histórica narrativa</option>
+              <option value="Cuento educativo">Cuento educativo</option>
+              <option value="Fábula con moraleja">Fábula con moraleja</option>
+              <option value="Texto informativo">Texto informativo adaptado</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-weight: 800; display: block; margin-bottom: 6px;">Propósito Pedagógico:</label>
+            <input type="text" id="ai-gen-custom-prompt" placeholder="Ej. Fortalecer inferencias y valores cívicos"
+              class="written-textarea" style="min-height: 48px;">
+          </div>
+        </div>
+
+        <div style="text-align: right; margin-top: 10px;">
+          <button id="btn-trigger-ai-gen" class="btn-primary" style="font-size: 1.15rem; padding: 14px 32px;">
+            ✨ Generar Lectura y Actividades
+          </button>
+        </div>
+
+        <div id="ai-gen-status-box" style="margin-top: 20px; display: none;"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- =========================================================================
+       MODALES DOCENTES (REVISIÓN DE IA Y FICHA DE ESTUDIANTE)
+       ========================================================================= -->
+
+  <!-- Modal Editor y Calidad de IA -->
+  <div id="modal-ai-review-editor" class="modal-overlay">
+    <div class="modal-card">
+      <div id="ai-review-editor-content">
+        <!-- Renderizado dinámico desde app.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Ficha Pedagógica del Estudiante -->
+  <div id="modal-student-detail" class="modal-overlay">
+    <div class="modal-card" style="max-width: 600px;">
+      <div id="student-detail-content">
+        <!-- Renderizado dinámico desde app.js -->
+      </div>
+      <div style="text-align: right; margin-top: 20px;">
+        <button class="btn-outline" onclick="window.leoApp.closeModal('modal-student-detail')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       SCRIPTS DE LA APLICACIÓN
+       ========================================================================= -->
+  <script src="js/data/diagnostic.js"></script>
+  <script src="js/data/readings.js"></script>
+  <script src="js/data/gamification.js"></script>
+  <script src="js/services/audio-service.js"></script>
+  <script src="js/services/ai-service.js"></script>
+  <script src="js/services/storage-service.js"></script>
+  <script src="js/app.js"></script>
+</body>
+
+</html>
